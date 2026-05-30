@@ -25,3 +25,9 @@ def test_router_roomie_court():
 def test_router_karma_report():
     result = route("產生 Karma 排行榜")
     assert result.intent == "karma_report"
+
+
+def test_router_line_announcement():
+    result = route("幫我整理成可以貼到 LINE 群組的公告")
+    assert result.intent == "line_announcement"
+    assert result.selected_superpower == "line-announcement-skill"

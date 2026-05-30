@@ -2,21 +2,200 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
 from roomiepeace import MemoryStore, RoomiePeaceAgent
+from roomiepeace.demo_scenarios import load_demo_scenario
 from roomiepeace.tools.karma_tools import build_karma_ranking, calculate_garbage_disaster_index
 
 
-DEMO_PROMPTS = {
-    "建立室友資料": "我們有四個室友：阿明、小美、冠宇、庭萱。小美這週期中考，阿明週三晚上不在，冠宇常常忘記倒垃圾。",
-    "分帳 demo": "阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。",
-    "家事排班 demo": "幫我們排這週家事。任務有倒垃圾、拖地、洗浴室、補衛生紙。",
-    "衝突調解 demo": "冠宇又忘記倒垃圾，但我不想跟他吵架，幫我提醒他。",
-    "室友法庭 demo": "啟動室友法庭，幫我判決冠宇不倒垃圾。",
-    "LINE 群組公告": "幫我把本週分帳、家事和垃圾提醒整理成可以貼到 LINE 群組的公告。",
-    "Karma 排行榜": "產生本週 Karma 排行榜。",
+SKILL_SANDBOX: dict[str, dict[str, Any]] = {
+    "receipt_splitter": {
+        "skill_name": "receipt-splitter-skill",
+        "owner": "A：Receipt Splitter Skill",
+        "main_file": "roomiepeace/superpowers/receipt_splitter.py",
+        "related_tools": ["roomiepeace/tools/bill_tools.py", "tests/test_bill_tools.py"],
+        "default_prompt": "阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。",
+    },
+    "chore_planner": {
+        "skill_name": "chore-planner-skill",
+        "owner": "B：Chore Planner Skill",
+        "main_file": "roomiepeace/superpowers/chore_planner.py",
+        "related_tools": ["roomiepeace/tools/chore_tools.py"],
+        "default_prompt": "幫我們排這週家事。小美這週期中考，阿明週三不在，冠宇上週沒倒垃圾。",
+    },
+    "conflict_mediator": {
+        "skill_name": "conflict-mediator-skill",
+        "owner": "C：Conflict Mediator Skill",
+        "main_file": "roomiepeace/superpowers/conflict_mediator.py",
+        "related_tools": ["roomiepeace/tools/text_tools.py", "roomiepeace/guardrails.py"],
+        "default_prompt": "冠宇又忘記倒垃圾，但我不想跟他吵架，幫我提醒他。",
+    },
+    "roomie_court": {
+        "skill_name": "roomie-court-skill",
+        "owner": "D：Roomie Court Skill",
+        "main_file": "roomiepeace/superpowers/roomie_court.py",
+        "related_tools": ["roomiepeace/tools/text_tools.py"],
+        "default_prompt": "啟動室友法庭，幫我判決冠宇不倒垃圾。",
+    },
+    "karma_report": {
+        "skill_name": "karma-report-skill",
+        "owner": "E：Karma Report Skill",
+        "main_file": "roomiepeace/superpowers/karma_report.py",
+        "related_tools": ["roomiepeace/tools/karma_tools.py"],
+        "default_prompt": "產生本週 Karma 排行榜。",
+    },
+    "line_announcement": {
+        "skill_name": "line-announcement-skill",
+        "owner": "G / H：Integration Demo Skill",
+        "main_file": "roomiepeace/superpowers/line_announcement.py",
+        "related_tools": ["roomiepeace/tools/karma_tools.py", "roomiepeace/tools/text_tools.py"],
+        "default_prompt": "幫我把本週分帳、家事和垃圾提醒整理成可以貼到 LINE 群組的公告。",
+    },
 }
+
+
+TEAM_ROLES = [
+    {
+        "role": "A",
+        "owner": "Receipt Splitter Skill",
+        "files": [
+            "roomiepeace/superpowers/receipt_splitter.py",
+            "roomiepeace/tools/bill_tools.py",
+            "tests/test_bill_tools.py",
+        ],
+        "deliverable": "分帳解析、品項分類、金額計算與分帳測試。",
+    },
+    {
+        "role": "B",
+        "owner": "Chore Planner Skill",
+        "files": [
+            "roomiepeace/superpowers/chore_planner.py",
+            "roomiepeace/tools/chore_tools.py",
+        ],
+        "deliverable": "家事排班邏輯、difficulty 分數與公平性說明。",
+    },
+    {
+        "role": "C",
+        "owner": "Conflict Mediator Skill",
+        "files": [
+            "roomiepeace/superpowers/conflict_mediator.py",
+            "roomiepeace/tools/text_tools.py",
+            "roomiepeace/guardrails.py",
+        ],
+        "deliverable": "三種提醒版本、語氣風險與安全降級規則。",
+    },
+    {
+        "role": "D",
+        "owner": "Roomie Court Skill",
+        "files": [
+            "roomiepeace/superpowers/roomie_court.py",
+            "roomiepeace/tools/text_tools.py",
+        ],
+        "deliverable": "娛樂法庭格式、證據、判決理由與免責聲明。",
+    },
+    {
+        "role": "E",
+        "owner": "Karma Report Skill",
+        "files": [
+            "roomiepeace/superpowers/karma_report.py",
+            "roomiepeace/tools/karma_tools.py",
+        ],
+        "deliverable": "Karma 計分、排行榜、稱號與共居狀態。",
+    },
+    {
+        "role": "F",
+        "owner": "UI / Dashboard",
+        "files": [
+            "app.py",
+            "docs/demo_script.md",
+        ],
+        "deliverable": "Guided Demo、Skill Sandbox、Dashboard 和展示畫面整理。",
+    },
+    {
+        "role": "G",
+        "owner": "Integration / Router / Memory / Trace",
+        "files": [
+            "roomiepeace/agent.py",
+            "roomiepeace/router.py",
+            "roomiepeace/memory.py",
+            "roomiepeace/trace.py",
+            "data/memory.json",
+        ],
+        "deliverable": "Router 命中、agent flow、event memory、trace 與整合測試。",
+    },
+    {
+        "role": "H",
+        "owner": "Demo / PPT / Video / Evaluation",
+        "files": [
+            "docs/demo_script.md",
+            "docs/project_overview.md",
+            "README.md",
+            "docs/evaluation_plan.md",
+        ],
+        "deliverable": "demo 講稿、PPT 素材、錄影順序與評測方式。",
+    },
+]
+
+
+BRANCH_NAMES = [
+    "feature/receipt-splitter",
+    "feature/chore-planner",
+    "feature/conflict-mediator",
+    "feature/roomie-court",
+    "feature/karma-report",
+    "feature/ui-guided-demo",
+    "feature/integration-router-memory",
+    "feature/docs-demo-video",
+]
+
+
+DO_NOT_TOUCH_TOGETHER = [
+    "app.py",
+    "roomiepeace/agent.py",
+    "roomiepeace/router.py",
+    "roomiepeace/memory.py",
+    "data/memory.json",
+    "README.md",
+]
+
+
+PR_CHECKLIST = [
+    "`python -m pytest -q` 通過",
+    "Streamlit app 可以啟動",
+    "在 Skill Sandbox 用 default prompt 測過自己的 skill",
+    "再用 custom prompt 測過 router 是否仍命中自己的 skill",
+    "Agent Trace 有顯示正確 intent、skill、tools 和 memory updates",
+    "沒有 commit `.env`、cache、截圖暫存或 demo runtime memory drift",
+]
+
+
+SKILL_OUTPUT_CONTRACT = """{
+    "intent": "...",
+    "skill": "...",
+    "response_markdown": "...",
+    "line_message": "...",
+    "tables": {...},
+    "tools_used": [...],
+    "memory_updates": [...]
+}"""
+
+
+def init_session_state() -> None:
+    defaults = {
+        "history": [],
+        "demo_history": [],
+        "demo_results": {},
+        "sandbox_results": {},
+        "latest_result": None,
+        "sandbox_result": None,
+        "demo_transcript": "",
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value.copy() if isinstance(value, (dict, list)) else value
 
 
 def get_memory() -> MemoryStore:
@@ -25,12 +204,40 @@ def get_memory() -> MemoryStore:
     return st.session_state.memory_store
 
 
-def run_agent(prompt: str) -> None:
+def reset_memory_state() -> None:
+    memory = get_memory()
+    memory.reset()
+    st.session_state.history = []
+    st.session_state.demo_history = []
+    st.session_state.demo_results = {}
+    st.session_state.sandbox_results = {}
+    st.session_state.latest_result = None
+    st.session_state.sandbox_result = None
+    st.session_state.demo_transcript = ""
+
+
+def run_agent(prompt: str, source: str, title: str = "") -> dict[str, Any]:
     memory = get_memory()
     agent = RoomiePeaceAgent(memory)
     result = agent.handle(prompt)
+    record = {"source": source, "title": title, "prompt": prompt, "result": result}
     st.session_state.latest_result = result
-    st.session_state.history.append({"prompt": prompt, "result": result})
+    st.session_state.history.append(record)
+    return result
+
+
+def run_demo_step(step: dict[str, str]) -> dict[str, Any]:
+    result = run_agent(step["prompt"], source="guided_demo", title=step["title"])
+    st.session_state.demo_results[step["id"]] = result
+    st.session_state.demo_history.append({"step": step, "result": result})
+    return result
+
+
+def run_full_demo(steps: list[dict[str, str]]) -> None:
+    reset_memory_state()
+    for step in steps:
+        run_demo_step(step)
+    st.session_state.demo_transcript = build_demo_transcript()
 
 
 def render_sidebar(memory: MemoryStore) -> None:
@@ -39,9 +246,7 @@ def render_sidebar(memory: MemoryStore) -> None:
     st.sidebar.caption("共居生活 Dashboard")
 
     if st.sidebar.button("重置 demo memory", use_container_width=True):
-        memory.reset()
-        st.session_state.history = []
-        st.session_state.latest_result = None
+        reset_memory_state()
         st.rerun()
 
     st.sidebar.subheader("室友名單")
@@ -57,7 +262,7 @@ def render_sidebar(memory: MemoryStore) -> None:
     latest_expense = snapshot.get("expenses", [])[-1:] or []
     if latest_expense:
         for transfer in latest_expense[0].get("transfers", []):
-            st.sidebar.write(f"- {transfer['from']} → {transfer['to']}：{transfer['amount']} 元")
+            st.sidebar.write(f"- {transfer['from']} -> {transfer['to']}：{transfer['amount']} 元")
     else:
         st.sidebar.write("目前沒有新的分帳。")
 
@@ -79,34 +284,261 @@ def render_sidebar(memory: MemoryStore) -> None:
         st.sidebar.write("尚未排班。")
 
 
-def render_result(result: dict) -> None:
-    st.markdown(result["response_markdown"])
-
+def render_tables(result: dict[str, Any]) -> None:
     tables = result.get("tables", {})
     for title, rows in tables.items():
         if rows:
-            st.subheader(title)
+            st.markdown(f"**{title}**")
             st.dataframe(rows, use_container_width=True, hide_index=True)
 
-    if result.get("line_message"):
-        st.subheader("可貼到 LINE 群組的訊息")
+
+def render_line_message(result: dict[str, Any], key: str) -> None:
+    line_message = result.get("line_message", "")
+    if not line_message:
+        return
+    st.markdown("**LINE message**")
+    st.text_area(
+        "LINE message",
+        value=line_message,
+        height=160,
+        label_visibility="collapsed",
+        key=key,
+    )
+
+
+def render_memory_updates(result: dict[str, Any]) -> None:
+    updates = result.get("trace", {}).get("memory_updates") or result.get("memory_updates", [])
+    if not updates:
+        st.write("無 memory update。")
+        return
+    for update in updates:
+        st.write(f"- {update}")
+
+
+def render_result(result: dict[str, Any], key_prefix: str) -> None:
+    st.markdown(result["response_markdown"])
+    render_tables(result)
+    render_line_message(result, key=f"{key_prefix}_line_message")
+
+
+def render_trace(result: dict[str, Any] | None, expanded: bool = True) -> None:
+    if not result:
+        st.info("還沒有執行結果。")
+        return
+    trace = result.get("trace", {})
+    st.json(trace, expanded=expanded)
+
+
+def build_demo_transcript() -> str:
+    lines = ["# RoomiePeace Demo Transcript", ""]
+    for index, item in enumerate(st.session_state.demo_history, start=1):
+        step = item["step"]
+        result = item["result"]
+        trace = result.get("trace", {})
+        lines.extend(
+            [
+                f"## Step {index}: {step['title']}",
+                "",
+                f"Purpose: {step['purpose']}",
+                "",
+                f"Prompt: {step['prompt']}",
+                "",
+                f"Expected intent: `{step['expected_intent']}`",
+                f"Actual intent: `{trace.get('intent', result.get('intent'))}`",
+                f"Expected skill: `{step['expected_skill']}`",
+                f"Actual skill: `{trace.get('selected_superpower', result.get('skill'))}`",
+                "",
+                "Memory updates:",
+            ]
+        )
+        updates = trace.get("memory_updates", [])
+        lines.extend([f"- {update}" for update in updates] or ["- None"])
+        if result.get("line_message"):
+            lines.extend(["", "LINE message:", "", "```text", result["line_message"], "```"])
+        lines.extend(["", "Output:", "", result.get("response_markdown", ""), ""])
+    return "\n".join(lines)
+
+
+def render_demo_summary() -> None:
+    if not st.session_state.demo_history:
+        st.info("尚未執行 demo。可以逐步跑，也可以直接 Run full demo。")
+        return
+    rows = []
+    for index, item in enumerate(st.session_state.demo_history, start=1):
+        step = item["step"]
+        result = item["result"]
+        trace = result.get("trace", {})
+        rows.append(
+            {
+                "Step": index,
+                "Title": step["title"],
+                "Expected intent": step["expected_intent"],
+                "Actual intent": trace.get("intent"),
+                "Expected skill": step["expected_skill"],
+                "Actual skill": trace.get("selected_superpower"),
+                "Memory updates": len(trace.get("memory_updates", [])),
+                "Safe": trace.get("guardrail_result", {}).get("safe"),
+            }
+        )
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def render_guided_demo_tab() -> None:
+    scenario = load_demo_scenario()
+    steps = scenario["steps"]
+
+    st.header("Guided Demo")
+    st.caption(f"故事線：{scenario['scenario_name']}")
+    st.write(scenario.get("description", ""))
+
+    control_cols = st.columns([1, 1, 1.4])
+    with control_cols[0]:
+        if st.button("Reset demo memory", use_container_width=True):
+            reset_memory_state()
+            st.rerun()
+    with control_cols[1]:
+        if st.button("Run full demo", type="primary", use_container_width=True):
+            run_full_demo(steps)
+            st.rerun()
+    with control_cols[2]:
+        if st.button("Export demo transcript", use_container_width=True):
+            st.session_state.demo_transcript = build_demo_transcript()
+
+    st.subheader("Full Demo Summary")
+    render_demo_summary()
+
+    if st.session_state.demo_transcript:
         st.text_area(
-            "LINE message",
-            value=result["line_message"],
-            height=180,
-            label_visibility="collapsed",
+            "Demo transcript markdown",
+            value=st.session_state.demo_transcript,
+            height=300,
         )
 
+    st.subheader("Demo Steps")
+    for index, step in enumerate(steps, start=1):
+        result = st.session_state.demo_results.get(step["id"])
+        label = f"Step {index}: {step['title']}"
+        with st.expander(label, expanded=index == 1 or result is not None):
+            meta_cols = st.columns(2)
+            with meta_cols[0]:
+                st.markdown(f"**Step number**：{index}")
+                st.markdown(f"**Step title**：{step['title']}")
+                st.markdown(f"**Step purpose**：{step['purpose']}")
+            with meta_cols[1]:
+                st.markdown(f"**Expected intent**：`{step['expected_intent']}`")
+                st.markdown(f"**Expected skill**：`{step['expected_skill']}`")
+            st.markdown("**Prompt**")
+            st.code(step["prompt"], language="text")
 
-def render_trace(result: dict | None) -> None:
-    st.subheader("Agent Trace")
-    if not result:
-        st.info("先點 quick prompt 或輸入一句話，就會看到 router、skill、tool 和 memory trace。")
-        return
-    st.json(result.get("trace", {}))
+            if st.button("Run this step", key=f"run_step_{step['id']}"):
+                result = run_demo_step(step)
+                st.session_state.demo_transcript = ""
 
-    with st.expander("Memory snapshot", expanded=False):
-        st.json(result.get("memory_snapshot", {}))
+            if result:
+                actual_intent = result.get("trace", {}).get("intent")
+                actual_skill = result.get("trace", {}).get("selected_superpower")
+                status = "matched" if actual_intent == step["expected_intent"] and actual_skill == step["expected_skill"] else "check routing"
+                st.markdown(f"**Route check**：`{status}`")
+                st.markdown("**Output result**")
+                render_result(result, key_prefix=f"demo_{step['id']}")
+                st.markdown("**Memory updates**")
+                render_memory_updates(result)
+                st.markdown("**Agent Trace**")
+                render_trace(result, expanded=False)
+            else:
+                st.info("這個 step 尚未執行。")
+
+
+def render_skill_sandbox_tab() -> None:
+    st.header("Skill Sandbox")
+    st.caption("給 skill owners 單獨測自己的 prompt、router 命中、output contract 和 memory updates。")
+
+    selected_skill = st.selectbox("Select skill", list(SKILL_SANDBOX.keys()))
+    config = SKILL_SANDBOX[selected_skill]
+
+    info_cols = st.columns([1, 1])
+    with info_cols[0]:
+        st.markdown(f"**Skill name**：`{config['skill_name']}`")
+        st.markdown(f"**Owner role**：{config['owner']}")
+        st.markdown(f"**Main file**：`{config['main_file']}`")
+    with info_cols[1]:
+        st.markdown("**Related tools**")
+        for file_path in config["related_tools"]:
+            st.write(f"- `{file_path}`")
+
+    st.markdown("**Default test prompt**")
+    st.code(config["default_prompt"], language="text")
+
+    custom_prompt = st.text_area(
+        "Custom prompt",
+        value=config["default_prompt"],
+        height=120,
+        key=f"sandbox_prompt_{selected_skill}",
+    )
+    reset_before_run = st.checkbox("Reset memory before run", value=False)
+
+    if st.button("Run through Agent", type="primary"):
+        if reset_before_run:
+            reset_memory_state()
+        result = run_agent(custom_prompt, source="skill_sandbox", title=selected_skill)
+        st.session_state.sandbox_result = result
+        st.session_state.sandbox_results[selected_skill] = result
+
+    result = st.session_state.sandbox_results.get(selected_skill)
+    if result:
+        trace = result.get("trace", {})
+        route_cols = st.columns(2)
+        route_cols[0].metric("Router intent", trace.get("intent", result.get("intent", "unknown")))
+        route_cols[1].metric("Selected skill", trace.get("selected_superpower", result.get("skill", "unknown")))
+
+        st.subheader("Output result")
+        render_result(result, key_prefix=f"sandbox_{selected_skill}")
+        st.subheader("Trace")
+        render_trace(result, expanded=True)
+        st.subheader("Memory snapshot")
+        st.json(result.get("memory_snapshot", {}), expanded=False)
+    else:
+        st.info("選 skill 後可以先用 default prompt 跑一次，再改 custom prompt 測 router 命中。")
+
+
+def render_collaboration_dashboard_tab() -> None:
+    st.header("Collaboration Dashboard")
+    st.caption("八人分工、branch 規範、PR checklist 和 skill output contract 集中在這裡。")
+
+    role_rows = []
+    for role in TEAM_ROLES:
+        role_rows.append(
+            {
+                "Role": role["role"],
+                "Owner": role["owner"],
+                "Main files": "\n".join(role["files"]),
+                "Deliverable": role["deliverable"],
+            }
+        )
+    st.dataframe(role_rows, use_container_width=True, hide_index=True, height=430)
+
+    left, right = st.columns(2)
+    with left:
+        st.subheader("Branch naming convention")
+        st.code("\n".join(BRANCH_NAMES), language="text")
+
+        st.subheader("不要互相踩的檔案")
+        for file_path in DO_NOT_TOUCH_TOGETHER:
+            st.write(f"- `{file_path}`")
+
+    with right:
+        st.subheader("PR checklist")
+        for item in PR_CHECKLIST:
+            st.checkbox(item, value=False, disabled=True)
+
+        st.subheader("Skill output contract")
+        st.code(SKILL_OUTPUT_CONTRACT, language="python")
+
+    st.subheader("開發建議")
+    st.write("- Skill owner 主要改自己的 `superpowers/` 和 `tools/` 檔案。")
+    st.write("- Merge 前先到 Skill Sandbox 跑 default prompt 和 custom prompt。")
+    st.write("- F / G 需要改整合層時，先跟 skill owners 對齊避免同時改同一段 UI 或 router。")
+    st.write("- H 可以修改 `data/demo_scenarios.json` 調整 demo 文案，不需要改 `app.py`。")
 
 
 def main() -> None:
@@ -118,58 +550,33 @@ def main() -> None:
     st.markdown(
         """
         <style>
-        .block-container { padding-top: 1.4rem; }
-        div[data-testid="stMetricValue"] { font-size: 1.4rem; }
-        .stButton > button { border-radius: 8px; height: 2.5rem; }
+        .block-container { padding-top: 1.2rem; }
+        div[data-testid="stMetricValue"] { font-size: 1rem; }
+        .stButton > button { border-radius: 8px; min-height: 2.4rem; }
         textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        code { white-space: pre-wrap; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    if "history" not in st.session_state:
-        st.session_state.history = []
-    if "latest_result" not in st.session_state:
-        st.session_state.latest_result = None
-
+    init_session_state()
     memory = get_memory()
     render_sidebar(memory)
 
     st.title("RoomiePeace Superpowers")
-    st.caption("讓 AI Agent 幫室友處理分帳、家事、衝突和搞笑判決")
+    st.caption("Skill-based 共居生活協調 Agent：Router -> Skill -> Tools -> Memory -> Guardrail -> Trace")
 
-    st.write("Demo quick prompts")
-    prompt_cols = st.columns(4)
-    for index, (label, prompt) in enumerate(DEMO_PROMPTS.items()):
-        with prompt_cols[index % 4]:
-            if st.button(label, use_container_width=True):
-                run_agent(prompt)
-                st.rerun()
+    guided_demo_tab, skill_sandbox_tab, collaboration_tab = st.tabs(
+        ["Guided Demo", "Skill Sandbox", "Collaboration Dashboard"]
+    )
 
-    left, right = st.columns([0.64, 0.36], gap="large")
-
-    with left:
-        st.subheader("輸入")
-        typed_prompt = st.chat_input("例如：阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。")
-        if typed_prompt:
-            run_agent(typed_prompt)
-            st.rerun()
-
-        result = st.session_state.latest_result
-        if result:
-            st.subheader("AI Agent 回覆")
-            render_result(result)
-        else:
-            st.info("從上方 quick prompts 開始「冠宇與垃圾桶事件」，或直接輸入任務。")
-
-        if st.session_state.history:
-            with st.expander("本次 demo 歷史", expanded=False):
-                for item in reversed(st.session_state.history[-6:]):
-                    st.markdown(f"**User**：{item['prompt']}")
-                    st.markdown(f"**Skill**：{item['result'].get('skill')}")
-
-    with right:
-        render_trace(st.session_state.latest_result)
+    with guided_demo_tab:
+        render_guided_demo_tab()
+    with skill_sandbox_tab:
+        render_skill_sandbox_tab()
+    with collaboration_tab:
+        render_collaboration_dashboard_tab()
 
 
 if __name__ == "__main__":

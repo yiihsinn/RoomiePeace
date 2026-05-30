@@ -1,73 +1,86 @@
-# RoomiePeace 小組分工必讀
+# RoomiePeace 八人協作必讀
 
-這份文件是給五個人同時開發用的。目標很簡單：每個人可以安心負責一個 skill，最後整合時不要互相踩檔案、不要 merge 到懷疑人生。
+這份文件是給 8 個人同時開發與 demo 用的。目標是讓每個 skill owner 可以獨立測自己的功能，UI / integration / demo owner 可以穩定整合，最後上台時不用靠口頭記憶硬撐。
 
 ## 分工總覽
 
-建議五個人各自負責一個 Superpower / Skill：
-
-| 成員 | Skill | 主要檔案 | 搭配工具檔 |
+| 成員 | Role | 主要檔案 | 交付物 |
 | --- | --- | --- | --- |
-| A | 分帳技能 | `roomiepeace/superpowers/receipt_splitter.py` | `roomiepeace/tools/bill_tools.py` |
-| B | 家事排班技能 | `roomiepeace/superpowers/chore_planner.py` | `roomiepeace/tools/chore_tools.py` |
-| C | 衝突調解技能 | `roomiepeace/superpowers/conflict_mediator.py` | `roomiepeace/tools/text_tools.py`, `roomiepeace/guardrails.py` |
-| D | 室友法庭技能 | `roomiepeace/superpowers/roomie_court.py` | `roomiepeace/tools/text_tools.py` |
-| E | Karma 排行榜技能 | `roomiepeace/superpowers/karma_report.py` | `roomiepeace/tools/karma_tools.py` |
+| A | Receipt Splitter Skill | `roomiepeace/superpowers/receipt_splitter.py`, `roomiepeace/tools/bill_tools.py`, `tests/test_bill_tools.py` | 分帳解析、品項分類、金額計算與測試 |
+| B | Chore Planner Skill | `roomiepeace/superpowers/chore_planner.py`, `roomiepeace/tools/chore_tools.py` | 家事排班、difficulty 分數、公平性說明 |
+| C | Conflict Mediator Skill | `roomiepeace/superpowers/conflict_mediator.py`, `roomiepeace/tools/text_tools.py`, `roomiepeace/guardrails.py` | 三種提醒版本、語氣風險、guardrail |
+| D | Roomie Court Skill | `roomiepeace/superpowers/roomie_court.py`, `roomiepeace/tools/text_tools.py` | 法庭格式、證據、判決理由、娛樂免責 |
+| E | Karma Report Skill | `roomiepeace/superpowers/karma_report.py`, `roomiepeace/tools/karma_tools.py` | Karma 計分、排行榜、稱號、共居狀態 |
+| F | UI / Dashboard | `app.py`, `docs/demo_script.md` if needed | Guided Demo、Skill Sandbox、Dashboard 體驗 |
+| G | Integration / Router / Memory / Trace | `roomiepeace/agent.py`, `roomiepeace/router.py`, `roomiepeace/memory.py`, `roomiepeace/trace.py`, `data/memory.json` | agent flow、router、event memory、trace、整合測試 |
+| H | Demo / PPT / Video / Evaluation | `data/demo_scenarios.json`, `docs/demo_flow_v2.md`, `docs/project_overview.md`, `README.md`, `docs/evaluation_plan.md` | demo 講稿、錄影順序、PPT 素材、評測方式 |
 
-`line_announcement.py` 比較像整合 demo skill，建議由 integration owner 或最後報告負責人維護。
+`line_announcement.py` 是 demo 整合 skill，建議由 G 或 H 維護，因為它會讀取前面步驟產生的 memory。
+
+## 核心架構不要打掉
+
+請維持這條 flow：
+
+```text
+User input
+  -> Router
+  -> selected Superpower / Skill
+  -> Tool execution
+  -> Memory update
+  -> Guardrail check
+  -> Final response + Agent Trace
+```
+
+如果只是改現有 skill，通常不需要碰 `app.py`、`agent.py` 或 `router.py`。
 
 ## 每個人主要改哪裡
 
-每個 skill 的主流程都放在：
+每個 skill 的主流程放在：
 
 ```text
 roomiepeace/superpowers/{skill_name}.py
 ```
 
-如果需要精準計算、資料處理、解析文字，請放在：
+精準計算、排班、文字解析、Karma 分數等 deterministic logic 放在：
 
 ```text
 roomiepeace/tools/{tool_name}.py
 ```
 
-不要把計算邏輯塞在 Streamlit UI，也不要全部寫進自然語言模板。這個專案要展示的是 skill-based agent，所以要能清楚分出：
+不要把計算邏輯塞進 UI，也不要讓 LLM 或模板直接算錢、算公平分數、改 memory。
 
-- Skill：任務流程怎麼走
-- Tool：實際計算或資料處理
-- Memory：記住事件
-- Template / LLM fallback：產生自然語言回覆
+## 請避免同時改的檔案
 
-## 請盡量不要同時改的檔案
-
-這些是整合層，最容易發生 merge conflict：
+這些是整合層或共用文件，最容易 merge conflict：
 
 ```text
 app.py
 roomiepeace/agent.py
 roomiepeace/router.py
+roomiepeace/memory.py
 data/memory.json
 README.md
 ```
 
-建議指定一位 integration owner 管這幾個檔案。其他人如果真的需要改，先在群組說一下。
+需要改這些檔案時，先在群組說一聲。F 管 UI，G 管 integration，H 管 demo 文案，彼此要先對齊。
 
 ## Skill 回傳格式
 
-每個 skill 的 `handle(user_input, memory)` 最好維持同樣格式：
+每個 skill 的 `handle(user_input, memory)` 要維持同樣 contract：
 
 ```python
 return {
-    "intent": "receipt_splitter",
-    "skill": "receipt-splitter-skill",
-    "response_markdown": markdown,
-    "line_message": line_message,
-    "tables": {"表格名稱": rows},
-    "tools_used": ["tool_a", "tool_b"],
-    "memory_updates": ["expense_created event"],
+    "intent": "...",
+    "skill": "...",
+    "response_markdown": "...",
+    "line_message": "...",
+    "tables": {...},
+    "tools_used": [...],
+    "memory_updates": [...]
 }
 ```
 
-這樣 `app.py` 和 Agent Trace 就能直接顯示，不需要每個人另外接 UI。
+UI、Skill Sandbox、Guided Demo 和 Agent Trace 都靠這個格式顯示結果。
 
 ## Memory 寫入規則
 
@@ -79,7 +92,7 @@ return {
 - 室友法庭：`court_case_created`
 - LINE 公告：`line_announcement_created`
 
-寫入 memory 時請優先使用 `MemoryStore` 裡現有方法，例如：
+請優先使用 `MemoryStore` 既有方法：
 
 ```python
 memory.record_expense(...)
@@ -88,7 +101,7 @@ memory.record_conflict(...)
 memory.record_court_case(...)
 ```
 
-如果要新增 event type，請先確認其他 skill 會不會需要讀它。
+如果要新增 event type，先確認 Karma、LINE 公告、Dashboard 會不會需要讀它。
 
 ## Guardrail 規則
 
@@ -101,7 +114,39 @@ memory.record_court_case(...)
 - 假裝有法律效力
 - 宣稱可以真的扣款或轉帳
 
-如果輸出可能會貼到 LINE 群組，語氣要再保守一點。嘴砲版本可以好笑，但要像「任務吐槽」，不要像「人格攻擊」。
+LINE 群組公告要比私訊更保守。嘴砲版本可以好笑，但要像「任務吐槽」，不要像「人格攻擊」。
+
+## Skill Sandbox 使用方式
+
+Skill owner merge 前都要做：
+
+1. 啟動 app：`streamlit run app.py`
+2. 進入 `Skill Sandbox`
+3. 在 `Select skill` 選自己的 skill
+4. 先跑 default prompt
+5. 再輸入 custom prompt
+6. 確認 router 命中自己的 intent / skill
+7. 確認 output contract、tables、line_message、trace、memory updates 都正常
+8. 有需要時勾 `Reset memory before run`
+
+如果 router 沒命中自己的 skill，請找 G 一起調整 `roomiepeace/router.py`。
+
+## Guided Demo 使用方式
+
+正式 demo 請走 `Guided Demo` tab：
+
+1. 按 `Reset demo memory`
+2. 按 `Run full demo`，或逐步點每個 step 的 `Run this step`
+3. 展示每一步的 Output result、LINE message、Tables、Agent Trace、Memory updates
+4. 按 `Export demo transcript` 產生 markdown，給 H 做影片或 PPT 素材
+
+Demo 流程資料在：
+
+```text
+data/demo_scenarios.json
+```
+
+H 可以改 demo 文案，不需要改 `app.py`。
 
 ## Branch 命名建議
 
@@ -113,7 +158,7 @@ git pull
 git checkout -b feature/receipt-splitter
 ```
 
-建議命名：
+建議 branch：
 
 ```text
 feature/receipt-splitter
@@ -121,8 +166,9 @@ feature/chore-planner
 feature/conflict-mediator
 feature/roomie-court
 feature/karma-report
-feature/ui-polish
-feature/docs-demo-script
+feature/ui-guided-demo
+feature/integration-router-memory
+feature/docs-demo-video
 ```
 
 ## Commit 建議
@@ -134,7 +180,7 @@ git add roomiepeace/superpowers/receipt_splitter.py roomiepeace/tools/bill_tools
 git commit -m "Improve receipt splitter parsing"
 ```
 
-不要用一個 commit 同時改五個 skill，會很難 review。
+不要一個 commit 同時改五個 skill，review 會很痛。
 
 ## Pull Request 檢查清單
 
@@ -142,9 +188,10 @@ git commit -m "Improve receipt splitter parsing"
 
 - `python -m pytest -q` 通過
 - Streamlit app 可以啟動
-- 自己負責的 quick prompt 可以跑
-- Agent Trace 有顯示正確 skill 和 tools
-- 沒有把 `.env`、快取檔、截圖暫存檔 commit 進來
+- Skill Sandbox default prompt 跑過
+- Skill Sandbox custom prompt 跑過
+- Agent Trace 顯示正確 intent、skill、tools 和 memory updates
+- 沒有把 `.env`、cache、截圖暫存檔 commit 進來
 - `data/memory.json` 沒有被 demo 過程改到奇怪狀態
 
 ## 測試方式
@@ -169,21 +216,18 @@ streamlit run app.py
 
 ## 新增一個 Skill 時要改哪些地方
 
-如果未來要新增第六個 skill，通常需要改：
-
 1. 新增 `roomiepeace/superpowers/new_skill.py`
 2. 必要時新增 `roomiepeace/tools/new_tools.py`
 3. 在 `roomiepeace/router.py` 加 intent keyword
 4. 在 `roomiepeace/agent.py` 接上 handle
-5. 在 `app.py` 加 quick prompt
-6. 加測試到 `tests/`
-7. 更新 README 或 demo script
-
-如果只是改現有五個 skill，通常不用碰 `agent.py` 和 `app.py`。
+5. 在 `app.py` 的 Skill Sandbox 加設定
+6. 必要時在 `data/demo_scenarios.json` 加 demo step
+7. 加測試到 `tests/`
+8. 更新 `docs/skill_contract.md` 或 README
 
 ## Demo 整合順序
 
-最後整合時建議照這個順序測：
+最後整合時照這條故事線測：
 
 1. 建立室友資料
 2. 分帳 demo
@@ -193,7 +237,7 @@ streamlit run app.py
 6. LINE 群組公告
 7. Karma 排行榜
 
-這條故事線叫「冠宇與垃圾桶事件」。如果這條流程能順跑，報告基本就穩了。
+故事線叫「冠宇與垃圾桶事件」。如果 Guided Demo 能完整跑完，報告基本就穩。
 
 ## 一句話原則
 
@@ -201,4 +245,4 @@ streamlit run app.py
 
 1. 計算交給 tool，不要交給文字生成。
 2. 重要狀態寫進 memory，不要只顯示在畫面上。
-3. 搞笑要有分寸，不要讓 RoomiePeace 變成室友戰爭啟動器。
+3. Merge 前一定到 Skill Sandbox 測自己的 skill。
