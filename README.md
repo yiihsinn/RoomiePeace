@@ -37,6 +37,7 @@ RoomiePeace Agent
 - `roomiepeace/tools/`：deterministic tools
 - `data/memory.json`：seed memory
 - `tests/`：基本測試
+- `TEAM_WORKFLOW.md`：五人分工必讀與開發規範
 
 ## Superpowers
 
