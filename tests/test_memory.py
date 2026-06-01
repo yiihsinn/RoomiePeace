@@ -16,9 +16,11 @@ def test_chore_skill_adds_chore_events(tmp_path):
     memory = MemoryStore(tmp_path / "memory.json")
     agent = RoomiePeaceAgent(memory)
 
-    agent.handle("幫我們排這週家事。任務有倒垃圾、拖地、洗浴室、補衛生紙。")
+    result = agent.handle("幫我們排這週家事。任務有倒垃圾、拖地、洗浴室、補衛生紙。")
     snapshot = memory.snapshot()
 
     assert len(snapshot["chores"]) == 1
     chore_events = [event for event in snapshot["events"] if event["event_type"] == "chore_assigned"]
     assert len(chore_events) == 4
+    assert len(result["tables"]["近期負擔總覽"]) == 4
+    assert result["trace"]["selected_superpower"] == "chore-planner-skill"

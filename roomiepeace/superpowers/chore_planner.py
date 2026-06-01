@@ -34,6 +34,15 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
         f"- {row['任務']}：{row['負責人']}（difficulty {row['difficulty']}）- {row['理由']}"
         for row in rows
     ]
+    workload_rows = [
+        {
+            "室友": roommate,
+            "排班前近期負擔": schedule["previous_loads"].get(roommate, 0),
+            "本週新增負擔": schedule["loads"].get(roommate, 0) - schedule["previous_loads"].get(roommate, 0),
+            "排班後累積負擔": schedule["loads"].get(roommate, 0),
+        }
+        for roommate in snapshot["roommates"]
+    ]
     commentary = "\n".join(f"- {line}" for line in schedule["commentary"])
     line_message = "\n".join(
         ["本週家事排班："]
@@ -49,6 +58,8 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
 
 **本週公平分數**：{schedule['fairness_score']} / 100
 
+公平分數會納入最近三次排班的 difficulty 負擔，以及本週所有室友的任務分配。
+
 **系統評論**
 {commentary}
 """.strip()
@@ -58,7 +69,7 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
         "skill": "chore-planner-skill",
         "response_markdown": markdown,
         "line_message": line_message,
-        "tables": {"家事排班": rows},
-        "tools_used": ["parse_chore_tasks", "generate_chore_schedule", "calculate_fairness_score"],
+        "tables": {"家事排班": rows, "近期負擔總覽": workload_rows},
+        "tools_used": ["parse_chore_tasks", "calculate_recent_chore_loads", "generate_chore_schedule", "calculate_fairness_score"],
         "memory_updates": [f"chore_assigned events: {len(events)}"],
     }
