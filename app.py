@@ -192,6 +192,7 @@ def init_session_state() -> None:
         "latest_result": None,
         "sandbox_result": None,
         "demo_transcript": "",
+        "guided_step_id": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -214,6 +215,7 @@ def reset_memory_state() -> None:
     st.session_state.latest_result = None
     st.session_state.sandbox_result = None
     st.session_state.demo_transcript = ""
+    st.session_state.guided_step_id = ""
 
 
 def run_agent(prompt: str, source: str, title: str = "") -> dict[str, Any]:
@@ -230,6 +232,7 @@ def run_demo_step(step: dict[str, str]) -> dict[str, Any]:
     result = run_agent(step["prompt"], source="guided_demo", title=step["title"])
     st.session_state.demo_results[step["id"]] = result
     st.session_state.demo_history.append({"step": step, "result": result})
+    st.session_state.guided_step_id = step["id"]
     return result
 
 
@@ -237,6 +240,7 @@ def run_full_demo(steps: list[dict[str, str]]) -> None:
     reset_memory_state()
     for step in steps:
         run_demo_step(step)
+    st.session_state.guided_step_id = steps[-1]["id"]
     st.session_state.demo_transcript = build_demo_transcript()
 
 
@@ -329,6 +333,136 @@ def render_trace(result: dict[str, Any] | None, expanded: bool = True) -> None:
     st.json(trace, expanded=expanded)
 
 
+def get_completed_demo_count(steps: list[dict[str, str]]) -> int:
+    return sum(1 for step in steps if step["id"] in st.session_state.demo_results)
+
+
+def get_current_demo_step(steps: list[dict[str, str]]) -> tuple[int, dict[str, str]]:
+    if not st.session_state.guided_step_id:
+        st.session_state.guided_step_id = steps[0]["id"]
+    for index, step in enumerate(steps, start=1):
+        if step["id"] == st.session_state.guided_step_id:
+            return index, step
+    st.session_state.guided_step_id = steps[0]["id"]
+    return 1, steps[0]
+
+
+def get_next_pending_step(steps: list[dict[str, str]]) -> dict[str, str]:
+    for step in steps:
+        if step["id"] not in st.session_state.demo_results:
+            return step
+    return steps[-1]
+
+
+def route_status(result: dict[str, Any] | None, step: dict[str, str]) -> tuple[str, str]:
+    if not result:
+        return "Ready", "neutral"
+    trace = result.get("trace", {})
+    matched = (
+        trace.get("intent") == step["expected_intent"]
+        and trace.get("selected_superpower") == step["expected_skill"]
+    )
+    if matched and trace.get("guardrail_result", {}).get("safe"):
+        return "Matched", "ok"
+    if matched:
+        return "Guardrail check", "warn"
+    return "Check routing", "warn"
+
+
+def status_chip(label: str, tone: str = "neutral") -> str:
+    return f"<span class='rp-chip rp-chip-{tone}'>{label}</span>"
+
+
+def render_demo_metrics(steps: list[dict[str, str]]) -> None:
+    memory = get_memory()
+    snapshot = memory.snapshot()
+    completed = get_completed_demo_count(steps)
+    latest_trace = (st.session_state.latest_result or {}).get("trace", {})
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Progress", f"{completed}/{len(steps)}")
+    metric_cols[1].metric("Memory events", len(snapshot.get("events", [])))
+    metric_cols[2].metric("Garbage index", calculate_garbage_disaster_index(snapshot))
+    metric_cols[3].metric("Latest skill", latest_trace.get("selected_superpower", "none"))
+
+
+def render_demo_step_rail(steps: list[dict[str, str]], current_step_id: str) -> None:
+    for index, step in enumerate(steps, start=1):
+        result = st.session_state.demo_results.get(step["id"])
+        status, tone = route_status(result, step)
+        button_label = f"{index}. {step['title']}"
+        if st.button(button_label, key=f"select_step_{step['id']}", use_container_width=True):
+            st.session_state.guided_step_id = step["id"]
+            st.rerun()
+        current_class = " rp-step-current" if step["id"] == current_step_id else ""
+        st.markdown(
+            f"""
+            <div class="rp-step-card{current_class}">
+              <div class="rp-step-row">
+                <strong>{index}</strong>
+                {status_chip(status, tone)}
+              </div>
+              <div class="rp-step-title">{step['title']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_selected_demo_step(index: int, step: dict[str, str]) -> None:
+    result = st.session_state.demo_results.get(step["id"])
+    status, tone = route_status(result, step)
+
+    st.markdown(
+        f"""
+        <div class="rp-demo-stage">
+          <div class="rp-stage-kicker">Step {index}</div>
+          <h3>{step['title']}</h3>
+          <p>{step['purpose']}</p>
+          {status_chip(status, tone)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    target_cols = st.columns(2)
+    with target_cols[0]:
+        st.markdown("**Expected intent**")
+        st.code(step["expected_intent"], language="text")
+    with target_cols[1]:
+        st.markdown("**Expected skill**")
+        st.code(step["expected_skill"], language="text")
+
+    st.markdown("**Prompt**")
+    st.code(step["prompt"], language="text")
+
+    run_cols = st.columns([1, 3])
+    with run_cols[0]:
+        if st.button("Run this step", type="primary", key=f"run_current_{step['id']}", use_container_width=True):
+            result = run_demo_step(step)
+            st.session_state.demo_transcript = ""
+
+    if not result:
+        st.info("這一步還沒跑。上台 demo 時先確認 prompt，再按 Run this step。")
+        return
+
+    trace = result.get("trace", {})
+    actual_cols = st.columns(3)
+    actual_cols[0].metric("Actual intent", trace.get("intent", "unknown"))
+    actual_cols[1].metric("Actual skill", trace.get("selected_superpower", "unknown"))
+    actual_cols[2].metric("Memory updates", len(trace.get("memory_updates", [])))
+
+    output_col, trace_col = st.columns([0.62, 0.38], gap="large")
+    with output_col:
+        st.subheader("Output")
+        render_result(result, key_prefix=f"demo_focus_{step['id']}")
+    with trace_col:
+        st.subheader("Trace")
+        st.markdown("**Memory updates**")
+        render_memory_updates(result)
+        st.markdown("**Agent Trace**")
+        render_trace(result, expanded=False)
+
+
 def build_demo_transcript() -> str:
     lines = ["# RoomiePeace Demo Transcript", ""]
     for index, item in enumerate(st.session_state.demo_history, start=1):
@@ -386,25 +520,51 @@ def render_demo_summary() -> None:
 def render_guided_demo_tab() -> None:
     scenario = load_demo_scenario()
     steps = scenario["steps"]
+    current_index, current_step = get_current_demo_step(steps)
+    completed = get_completed_demo_count(steps)
 
     st.header("Guided Demo")
     st.caption(f"故事線：{scenario['scenario_name']}")
-    st.write(scenario.get("description", ""))
+    st.progress(completed / len(steps))
+    render_demo_metrics(steps)
 
-    control_cols = st.columns([1, 1, 1.4])
+    control_cols = st.columns([1, 1, 1, 1.25])
     with control_cols[0]:
         if st.button("Reset demo memory", use_container_width=True):
             reset_memory_state()
             st.rerun()
     with control_cols[1]:
+        if st.button("Run current step", type="primary", use_container_width=True):
+            run_demo_step(current_step)
+            st.session_state.demo_transcript = ""
+            st.rerun()
+    with control_cols[2]:
         if st.button("Run full demo", type="primary", use_container_width=True):
             run_full_demo(steps)
             st.rerun()
-    with control_cols[2]:
+    with control_cols[3]:
         if st.button("Export demo transcript", use_container_width=True):
             st.session_state.demo_transcript = build_demo_transcript()
 
-    st.subheader("Full Demo Summary")
+    next_step = get_next_pending_step(steps)
+    st.markdown(
+        f"""
+        <div class="rp-demo-note">
+          <strong>Now:</strong> Step {current_index} · {current_step['title']}
+          <span>Next pending: {next_step['title']}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    step_col, stage_col = st.columns([0.26, 0.74], gap="large")
+    with step_col:
+        st.subheader("Steps")
+        render_demo_step_rail(steps, current_step["id"])
+    with stage_col:
+        render_selected_demo_step(current_index, current_step)
+
+    st.subheader("Demo Summary")
     render_demo_summary()
 
     if st.session_state.demo_transcript:
@@ -413,40 +573,6 @@ def render_guided_demo_tab() -> None:
             value=st.session_state.demo_transcript,
             height=300,
         )
-
-    st.subheader("Demo Steps")
-    for index, step in enumerate(steps, start=1):
-        result = st.session_state.demo_results.get(step["id"])
-        label = f"Step {index}: {step['title']}"
-        with st.expander(label, expanded=index == 1 or result is not None):
-            meta_cols = st.columns(2)
-            with meta_cols[0]:
-                st.markdown(f"**Step number**：{index}")
-                st.markdown(f"**Step title**：{step['title']}")
-                st.markdown(f"**Step purpose**：{step['purpose']}")
-            with meta_cols[1]:
-                st.markdown(f"**Expected intent**：`{step['expected_intent']}`")
-                st.markdown(f"**Expected skill**：`{step['expected_skill']}`")
-            st.markdown("**Prompt**")
-            st.code(step["prompt"], language="text")
-
-            if st.button("Run this step", key=f"run_step_{step['id']}"):
-                result = run_demo_step(step)
-                st.session_state.demo_transcript = ""
-
-            if result:
-                actual_intent = result.get("trace", {}).get("intent")
-                actual_skill = result.get("trace", {}).get("selected_superpower")
-                status = "matched" if actual_intent == step["expected_intent"] and actual_skill == step["expected_skill"] else "check routing"
-                st.markdown(f"**Route check**：`{status}`")
-                st.markdown("**Output result**")
-                render_result(result, key_prefix=f"demo_{step['id']}")
-                st.markdown("**Memory updates**")
-                render_memory_updates(result)
-                st.markdown("**Agent Trace**")
-                render_trace(result, expanded=False)
-            else:
-                st.info("這個 step 尚未執行。")
 
 
 def render_skill_sandbox_tab() -> None:
@@ -555,6 +681,84 @@ def main() -> None:
         .stButton > button { border-radius: 8px; min-height: 2.4rem; }
         textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
         code { white-space: pre-wrap; }
+        .rp-chip {
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 0.16rem 0.55rem;
+          font-size: 0.76rem;
+          font-weight: 700;
+          border: 1px solid #d7dde8;
+          color: #42526b;
+          background: #f8fafc;
+        }
+        .rp-chip-ok {
+          border-color: #9fd3b8;
+          color: #17643b;
+          background: #ecfdf3;
+        }
+        .rp-chip-warn {
+          border-color: #f2c77b;
+          color: #8a4b05;
+          background: #fff7e6;
+        }
+        .rp-demo-note {
+          display: flex;
+          gap: 1rem;
+          justify-content: space-between;
+          align-items: center;
+          margin: 0.8rem 0 1rem;
+          padding: 0.75rem 0.9rem;
+          border: 1px solid #d9e2ef;
+          border-radius: 8px;
+          background: #fbfcfe;
+          color: #25324a;
+        }
+        .rp-step-card {
+          margin: 0.35rem 0 0.85rem;
+          padding: 0.7rem 0.75rem;
+          border: 1px solid #dce3ee;
+          border-radius: 8px;
+          background: #ffffff;
+        }
+        .rp-step-current {
+          border-color: #4466d8;
+          box-shadow: 0 0 0 1px rgba(68, 102, 216, 0.12);
+        }
+        .rp-step-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.35rem;
+        }
+        .rp-step-title {
+          color: #25324a;
+          font-weight: 650;
+          line-height: 1.35;
+        }
+        .rp-demo-stage {
+          margin-bottom: 1rem;
+          padding: 1rem 1.1rem;
+          border: 1px solid #d9e2ef;
+          border-radius: 8px;
+          background: #ffffff;
+        }
+        .rp-demo-stage h3 {
+          margin: 0.1rem 0 0.4rem;
+          font-size: 1.35rem;
+        }
+        .rp-demo-stage p {
+          margin: 0 0 0.75rem;
+          color: #53627a;
+        }
+        .rp-stage-kicker {
+          color: #4466d8;
+          font-size: 0.78rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
         </style>
         """,
         unsafe_allow_html=True,
