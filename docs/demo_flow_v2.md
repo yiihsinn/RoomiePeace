@@ -12,7 +12,7 @@ streamlit run app.py
 
 2. 進入 `Guided Demo`
 3. 按 `Reset demo memory`
-4. 確認右側或步驟內的 Agent Trace 區域會顯示 intent、skill、tools、memory updates
+4. 確認步驟內的 Agent Pipeline、NLU summary 和 Agent Trace 會顯示 intent、skill、tools、memory updates
 
 ## 影片錄製順序
 
@@ -20,7 +20,7 @@ streamlit run app.py
 2. 進入 `Guided Demo`
 3. 按 `Reset demo memory`
 4. 逐步點 7 個 steps 的 `Run this step`
-5. 每一步都展示 Output result、LINE message、Tables、Agent Trace、Memory updates
+5. 每一步都展示 Agent Pipeline、NLU summary、Output result、LINE message、Tables、Agent Trace、Memory updates
 6. 最後按 `Export demo transcript`
 7. 切到 `Skill Sandbox`，展示 skill owner 可以選自己的 skill 測試
 8. 切到 `Collaboration Dashboard`，展示八人分工表
@@ -50,17 +50,19 @@ Prompt：
 Prompt：
 
 ```text
-阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。
+今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的，幫我們分帳並算誰要轉多少。
 ```
 
 講稿：
 
-> 第二步展示分帳技能。金額不是由 LLM 直接猜，而是由 deterministic tool `split_bill` 計算。衛生紙、洗衣精、垃圾袋是公用品，餅乾是阿明自己的快樂。
+> 第二步展示分帳技能。這句話刻意不是固定收據格式，而是一般人會在群組裡講的句子。Vertex Gemini 先做 NLU extraction，抽出 payer、items 和 personal item；金額不是由 LLM 直接猜，而是由 deterministic tool `split_bill` 計算。衛生紙、洗衣精、垃圾袋是公用品，餅乾是阿明自己的快樂。
 
 預期畫面：
 
 - Expected intent：`receipt_splitter`
 - Expected skill：`receipt-splitter-skill`
+- Agent Pipeline 顯示 `NLU -> Router -> Skill -> Tools -> Memory`
+- NLU summary 顯示 `vertex_gemini_structured_output`、payer、items、classification
 - 表格顯示品項分類
 - 公費總額 353 元
 - 四人平分每人 88.25 元
@@ -132,6 +134,7 @@ Prompt：
 - Expected intent：`roomie_court`
 - Expected skill：`roomie-court-skill`
 - 顯示案件名稱、被告、證據、累犯紀錄、累犯指數、判決、判決理由
+- 累犯依據區塊顯示 memory 讀到的三筆前情提要
 - 累犯指數顯示 `3（累犯加重）`
 - LINE message 包含娛樂判決聲明
 - Memory updates 顯示 `court_case_created`

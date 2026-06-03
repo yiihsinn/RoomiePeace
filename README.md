@@ -53,6 +53,8 @@ User input
 - Prompt
 - Expected intent / expected skill
 - Run this step button
+- Agent Pipeline
+- NLU Summary
 - Output result
 - LINE message
 - Tables
@@ -108,7 +110,7 @@ Sandbox 預設仍走 `RoomiePeaceAgent.handle(prompt)`，不 bypass router。畫
 
 ### 1. receipt-splitter-skill
 
-解析「阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65」這類輸入，判斷公用品和個人物品，呼叫 `split_bill` tool 精準計算分帳。金額不由 LLM 猜。
+解析「今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的」這類自然語句，判斷公用品和個人物品，呼叫 `split_bill` tool 精準計算分帳。金額不由 LLM 猜。
 
 ### 2. chore-planner-skill
 
@@ -154,10 +156,11 @@ http://localhost:8501
 1. 進入 `Guided Demo`
 2. 按 `Reset demo memory`
 3. 按 `Run full demo`，或依序點每個 step 的 `Run this step`
-4. 展示每一步的 Agent Trace
+4. 展示每一步的 Agent Pipeline 和 NLU Summary
 5. 展示可貼到 LINE 群組的 `LINE message`
-6. 最後展示 `Karma 排行榜`
-7. 如需交給 H 做影片或 PPT，按 `Export demo transcript`
+6. 展開 Agent Trace，指出 tools_used、memory_updates、guardrail_result
+7. 最後展示 `Karma 排行榜`
+8. 如需交給 H 做影片或 PPT，按 `Export demo transcript`
 
 Guided Demo 的文案在 `data/demo_scenarios.json`，H 可以直接改 JSON，不需要改 `app.py`。
 
@@ -175,7 +178,7 @@ GOOGLE_APPLICATION_CREDENTIALS=...
 例如使用者可以打比較自然的句子：
 
 ```text
-今天阿明先墊了公共用品，衛生紙129元，洗衣精159元，垃圾袋65元，餅乾89是他自己的，幫大家算一下
+今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的，幫我們分帳並算誰要轉多少。
 ```
 
 Gemini NLU 會抽出：

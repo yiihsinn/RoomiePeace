@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from typing import Any
 
 import streamlit as st
@@ -17,7 +18,7 @@ SKILL_SANDBOX: dict[str, dict[str, Any]] = {
         "owner": "A：Receipt Splitter Skill",
         "main_file": "roomiepeace/superpowers/receipt_splitter.py",
         "related_tools": ["roomiepeace/tools/bill_tools.py", "tests/test_bill_tools.py"],
-        "default_prompt": "阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。",
+        "default_prompt": "今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的，幫我們分帳並算誰要轉多少。",
     },
     "chore_planner": {
         "skill_name": "chore-planner-skill",
@@ -320,6 +321,7 @@ def render_memory_updates(result: dict[str, Any]) -> None:
 
 
 def render_result(result: dict[str, Any], key_prefix: str) -> None:
+    render_roomie_court_memory_evidence(result)
     st.markdown(result["response_markdown"])
     render_tables(result)
     render_line_message(result, key=f"{key_prefix}_line_message")
@@ -370,7 +372,150 @@ def route_status(result: dict[str, Any] | None, step: dict[str, str]) -> tuple[s
 
 
 def status_chip(label: str, tone: str = "neutral") -> str:
-    return f"<span class='rp-chip rp-chip-{tone}'>{label}</span>"
+    return f"<span class='rp-chip rp-chip-{tone}'>{escape(label)}</span>"
+
+
+def display_value(value: Any, fallback: str = "—") -> str:
+    if value is None or value == "" or value == []:
+        return fallback
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
+
+
+def short_list(values: list[Any], limit: int = 3) -> str:
+    if not values:
+        return "none"
+    visible = [str(value) for value in values[:limit]]
+    suffix = f" +{len(values) - limit}" if len(values) > limit else ""
+    return ", ".join(visible) + suffix
+
+
+def nlu_source_label(source: str) -> tuple[str, str]:
+    if source == "vertex_gemini_structured_output":
+        return "Vertex Gemini", "ai"
+    if "fallback" in source:
+        return "Deterministic fallback", "warn"
+    return display_value(source), "neutral"
+
+
+def render_pipeline_trace(result: dict[str, Any] | None) -> None:
+    if not result:
+        st.info("還沒有 pipeline trace。")
+        return
+
+    trace = result.get("trace", {})
+    nlu = trace.get("nlu_result", {})
+    nlu_label, nlu_tone = nlu_source_label(nlu.get("source", ""))
+    guardrail = trace.get("guardrail_result", {})
+    tools = trace.get("tools_used", [])
+    memory_updates = trace.get("memory_updates", [])
+    guardrail_safe = guardrail.get("safe")
+
+    nodes = [
+        ("01", "User Input", "自然語言需求", "rp-flow-node-neutral"),
+        ("02", "NLU", nlu_label, f"rp-flow-node-{nlu_tone}"),
+        ("03", "Router", trace.get("intent", result.get("intent", "unknown")), "rp-flow-node-neutral"),
+        ("04", "Skill", trace.get("selected_superpower", result.get("skill", "unknown")), "rp-flow-node-skill"),
+        ("05", "Tools", short_list(tools), "rp-flow-node-tool"),
+        ("06", "Memory", f"{len(memory_updates)} updates", "rp-flow-node-memory"),
+        ("07", "Guardrail", "safe" if guardrail_safe else "check", "rp-flow-node-safe" if guardrail_safe else "rp-flow-node-warn"),
+        ("08", "Output", "LINE / tables / markdown", "rp-flow-node-output"),
+    ]
+    cards = []
+    for number, label, value, class_name in nodes:
+        cards.append(
+            f"""
+            <div class="rp-flow-node {class_name}">
+              <div class="rp-flow-number">{escape(number)}</div>
+              <div class="rp-flow-label">{escape(label)}</div>
+              <div class="rp-flow-value">{escape(display_value(value))}</div>
+            </div>
+            """
+        )
+    st.markdown(f"<div class='rp-pipeline'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_nlu_summary(result: dict[str, Any] | None) -> None:
+    if not result:
+        st.info("還沒有 NLU summary。")
+        return
+
+    trace = result.get("trace", {})
+    nlu = trace.get("nlu_result", {})
+    data = nlu.get("data", {}) or {}
+    nlu_label, nlu_tone = nlu_source_label(nlu.get("source", ""))
+    confidence = nlu.get("confidence")
+    actor = data.get("payer") or data.get("target") or "—"
+    topic = data.get("topic") or ("分帳" if nlu.get("intent") == "receipt_splitter" else "—")
+    cards = [
+        ("NLU source", status_chip(nlu_label, nlu_tone)),
+        ("Intent", f"<code>{escape(display_value(nlu.get('intent')))}</code>"),
+        ("Confidence", escape(display_value(confidence))),
+        ("Actor / target", escape(display_value(actor))),
+        ("Topic", escape(display_value(topic))),
+        ("Tone", escape(display_value(data.get("tone", "funny but polite")))),
+    ]
+    rendered_cards = []
+    for label, value in cards:
+        rendered_cards.append(
+            f"""
+            <div class="rp-insight-card">
+              <div class="rp-insight-label">{escape(label)}</div>
+              <div class="rp-insight-value">{value}</div>
+            </div>
+            """
+        )
+    st.markdown(f"<div class='rp-insight-grid'>{''.join(rendered_cards)}</div>", unsafe_allow_html=True)
+
+    missing_fields = nlu.get("missing_fields", [])
+    if missing_fields:
+        st.warning(f"需要補充欄位：{', '.join(missing_fields)}")
+
+    items = data.get("items", []) or []
+    if items:
+        st.markdown("**Extracted receipt items**")
+        item_rows = [
+            {
+                "品項": item.get("name"),
+                "金額": item.get("amount"),
+                "NLU 分類": {
+                    "shared": "公用品",
+                    "personal": "個人物品",
+                    "unknown": "待判斷",
+                }.get(item.get("classification"), item.get("classification")),
+            }
+            for item in items
+        ]
+        st.dataframe(item_rows, use_container_width=True, hide_index=True)
+
+    notes = nlu.get("notes")
+    if notes:
+        st.caption(notes)
+
+
+def render_roomie_court_memory_evidence(result: dict[str, Any]) -> None:
+    if result.get("skill") != "roomie-court-skill":
+        return
+    prior_records = result.get("tables", {}).get("累犯紀錄", [])
+    if not prior_records:
+        return
+
+    evidence_cards = []
+    for index, record in enumerate(prior_records, start=1):
+        evidence_cards.append(
+            f"""
+            <div class="rp-evidence-card">
+              <div class="rp-evidence-index">{index}</div>
+              <div>
+                <div class="rp-evidence-type">{escape(display_value(record.get('類型')))}</div>
+                <div class="rp-evidence-text">{escape(display_value(record.get('內容')))}</div>
+              </div>
+            </div>
+            """
+        )
+    st.markdown("**累犯依據：Memory 讀到的前情提要**")
+    st.markdown(f"<div class='rp-evidence-grid'>{''.join(evidence_cards)}</div>", unsafe_allow_html=True)
 
 
 def render_demo_metrics(steps: list[dict[str, str]]) -> None:
@@ -450,6 +595,11 @@ def render_selected_demo_step(index: int, step: dict[str, str]) -> None:
     actual_cols[0].metric("Actual intent", trace.get("intent", "unknown"))
     actual_cols[1].metric("Actual skill", trace.get("selected_superpower", "unknown"))
     actual_cols[2].metric("Memory updates", len(trace.get("memory_updates", [])))
+
+    st.markdown("**Agent Pipeline**")
+    render_pipeline_trace(result)
+    with st.expander("NLU extraction summary", expanded=True):
+        render_nlu_summary(result)
 
     output_col, trace_col = st.columns([0.62, 0.38], gap="large")
     with output_col:
@@ -617,6 +767,11 @@ def render_skill_sandbox_tab() -> None:
         route_cols[0].metric("Router intent", trace.get("intent", result.get("intent", "unknown")))
         route_cols[1].metric("Selected skill", trace.get("selected_superpower", result.get("skill", "unknown")))
 
+        st.subheader("Agent Pipeline")
+        render_pipeline_trace(result)
+        with st.expander("NLU extraction summary", expanded=True):
+            render_nlu_summary(result)
+
         st.subheader("Output result")
         render_result(result, key_prefix=f"sandbox_{selected_skill}")
         st.subheader("Trace")
@@ -678,8 +833,36 @@ def main() -> None:
         <style>
         .block-container { padding-top: 1.2rem; }
         div[data-testid="stMetricValue"] { font-size: 1rem; }
-        .stButton > button { border-radius: 8px; min-height: 2.4rem; }
+        div[data-testid="stMetric"] {
+          padding: 0.72rem 0.82rem;
+          border: 1px solid #e0e6ef;
+          border-radius: 8px;
+          background: #ffffff;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+        div[data-testid="stMetric"]:hover {
+          transform: translateY(-2px);
+          border-color: #9eb1d9;
+          box-shadow: 0 10px 26px rgba(32, 43, 70, 0.09);
+        }
+        .stButton > button {
+          border-radius: 8px;
+          min-height: 2.4rem;
+          transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+        }
+        .stButton > button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 18px rgba(33, 49, 90, 0.12);
+          border-color: #5b77d6;
+        }
+        .stButton > button:active {
+          transform: translateY(0);
+        }
         textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        textarea:focus {
+          border-color: #5b77d6 !important;
+          box-shadow: 0 0 0 2px rgba(91, 119, 214, 0.14) !important;
+        }
         code { white-space: pre-wrap; }
         .rp-chip {
           display: inline-flex;
@@ -702,6 +885,11 @@ def main() -> None:
           color: #8a4b05;
           background: #fff7e6;
         }
+        .rp-chip-ai {
+          border-color: #85c8c2;
+          color: #075e59;
+          background: #eafaf8;
+        }
         .rp-demo-note {
           display: flex;
           gap: 1rem;
@@ -713,6 +901,12 @@ def main() -> None:
           border-radius: 8px;
           background: #fbfcfe;
           color: #25324a;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+        .rp-demo-note:hover {
+          transform: translateY(-1px);
+          border-color: #aab9d6;
+          box-shadow: 0 9px 24px rgba(32, 43, 70, 0.08);
         }
         .rp-step-card {
           margin: 0.35rem 0 0.85rem;
@@ -720,6 +914,14 @@ def main() -> None:
           border: 1px solid #dce3ee;
           border-radius: 8px;
           background: #ffffff;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+          cursor: default;
+        }
+        .rp-step-card:hover {
+          transform: translateX(3px);
+          border-color: #9eb1d9;
+          background: #fbfcff;
+          box-shadow: 0 8px 22px rgba(32, 43, 70, 0.08);
         }
         .rp-step-current {
           border-color: #4466d8;
@@ -743,6 +945,12 @@ def main() -> None:
           border: 1px solid #d9e2ef;
           border-radius: 8px;
           background: #ffffff;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+        .rp-demo-stage:hover {
+          transform: translateY(-2px);
+          border-color: #9eb1d9;
+          box-shadow: 0 12px 30px rgba(32, 43, 70, 0.08);
         }
         .rp-demo-stage h3 {
           margin: 0.1rem 0 0.4rem;
@@ -758,6 +966,155 @@ def main() -> None:
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0;
+        }
+        .rp-pipeline {
+          display: grid;
+          grid-template-columns: repeat(8, minmax(0, 1fr));
+          gap: 0.55rem;
+          margin: 0.45rem 0 1rem;
+        }
+        .rp-flow-node {
+          min-height: 6.3rem;
+          padding: 0.68rem 0.62rem;
+          border: 1px solid #dfe6f0;
+          border-radius: 8px;
+          background: #ffffff;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+          overflow: hidden;
+        }
+        .rp-flow-node:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 12px 28px rgba(32, 43, 70, 0.11);
+          border-color: #8fa2cc;
+        }
+        .rp-flow-number {
+          display: inline-flex;
+          width: 1.45rem;
+          height: 1.45rem;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 0.46rem;
+          border-radius: 999px;
+          font-size: 0.7rem;
+          font-weight: 800;
+          color: #ffffff;
+          background: #4d607d;
+        }
+        .rp-flow-label {
+          font-size: 0.72rem;
+          font-weight: 800;
+          color: #56637a;
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
+        .rp-flow-value {
+          margin-top: 0.22rem;
+          color: #1f2b3d;
+          font-weight: 750;
+          font-size: 0.82rem;
+          line-height: 1.25;
+          overflow-wrap: anywhere;
+        }
+        .rp-flow-node-ai { background: #f0fbfa; border-color: #b7ded9; }
+        .rp-flow-node-skill { background: #f6f2ff; border-color: #d3c5f1; }
+        .rp-flow-node-tool { background: #fff7ea; border-color: #edcf98; }
+        .rp-flow-node-memory { background: #f1f8ef; border-color: #bdd8b5; }
+        .rp-flow-node-safe { background: #effaf4; border-color: #afd6be; }
+        .rp-flow-node-warn { background: #fff5ed; border-color: #e7bd91; }
+        .rp-flow-node-output { background: #eef6ff; border-color: #bad0ea; }
+        .rp-insight-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.7rem;
+          margin: 0.3rem 0 0.9rem;
+        }
+        .rp-insight-card {
+          padding: 0.78rem 0.82rem;
+          border: 1px solid #dfe6f0;
+          border-radius: 8px;
+          background: #ffffff;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+        .rp-insight-card:hover {
+          transform: translateY(-2px);
+          border-color: #9eb1d9;
+          box-shadow: 0 10px 24px rgba(32, 43, 70, 0.08);
+        }
+        .rp-insight-label {
+          color: #61708a;
+          font-size: 0.74rem;
+          font-weight: 750;
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
+        .rp-insight-value {
+          margin-top: 0.22rem;
+          color: #1f2b3d;
+          font-size: 0.96rem;
+          font-weight: 750;
+          overflow-wrap: anywhere;
+        }
+        .rp-evidence-grid {
+          display: grid;
+          gap: 0.55rem;
+          margin: 0.35rem 0 0.95rem;
+        }
+        .rp-evidence-card {
+          display: grid;
+          grid-template-columns: 2rem minmax(0, 1fr);
+          gap: 0.65rem;
+          align-items: start;
+          padding: 0.72rem 0.78rem;
+          border: 1px solid #e1e7ef;
+          border-radius: 8px;
+          background: #fffdf8;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+        .rp-evidence-card:hover {
+          transform: translateX(3px);
+          border-color: #e1bd73;
+          box-shadow: 0 10px 24px rgba(83, 68, 37, 0.08);
+        }
+        .rp-evidence-index {
+          width: 1.65rem;
+          height: 1.65rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: #293549;
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 0.78rem;
+        }
+        .rp-evidence-type {
+          color: #8a5a0b;
+          font-weight: 800;
+          font-size: 0.78rem;
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
+        .rp-evidence-text {
+          color: #26364c;
+          line-height: 1.42;
+          font-weight: 620;
+        }
+        @media (max-width: 1100px) {
+          .rp-pipeline {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .rp-insight-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 760px) {
+          .rp-demo-note {
+            display: block;
+          }
+          .rp-pipeline,
+          .rp-insight-grid {
+            grid-template-columns: 1fr;
+          }
         }
         </style>
         """,

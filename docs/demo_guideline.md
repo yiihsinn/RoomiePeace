@@ -29,14 +29,14 @@ http://localhost:8501
 Reset demo memory
 ```
 
-建議不要一開始按 `Run full demo`。正式展示比較適合逐步按 `Run current step`，因為每一步可以講清楚 Agent Trace 和 memory updates。
+建議不要一開始按 `Run full demo`。正式展示比較適合逐步按 `Run current step`，因為每一步可以講清楚 Agent Pipeline、NLU summary、Agent Trace 和 memory updates。
 
 ## 開場台詞
 
 > 我們的題目是 RoomiePeace Superpowers。它不是一般室友聊天 app，而是 skill-based agent。
 > 我們有接 Vertex Gemini 做 NLU extraction：Gemini 先把自然語言抽成 payer、items、target、topic 這些 structured fields。
 > 接著 skill 會呼叫 deterministic tools 做計算、排班、累犯判斷和 memory 更新。
-> 等一下大家可以看 Guided Demo 右邊的 trace：每一步都會顯示 NLU source、router 判斷出的 intent、選到哪個 skill、呼叫哪些 tools、更新哪些 memory。
+> 等一下大家可以看 Guided Demo 裡的 Agent Pipeline 和 NLU summary：每一步都會顯示 Gemini 或 fallback 如何抽欄位、router 判斷出的 intent、選到哪個 skill、呼叫哪些 tools、更新哪些 memory。
 > 今天故事線叫「冠宇與垃圾桶事件」，主角不是壞人，只是跟倒垃圾任務有一段不太健康的遠距離關係。
 
 畫面操作：
@@ -79,13 +79,14 @@ Prompt：
 Prompt：
 
 ```text
-阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。
+今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的，幫我們分帳並算誰要轉多少。
 ```
 
 台詞：
 
-> 第二步展示分帳。金額不能交給語言模型自由發揮，所以 RoomiePeace 會呼叫 deterministic tool。
-> Gemini 只負責把自然語言抽成 payer 和 items，真正的公費總額與轉帳建議由 `split_bill` 算。
+> 第二步展示分帳。這句話刻意比較像真實群組訊息，不是固定收據格式。
+> 金額不能交給語言模型自由發揮，所以 RoomiePeace 會呼叫 deterministic tool。
+> Gemini 只負責把自然語言抽成 payer、items 和 personal item，真正的公費總額與轉帳建議由 `split_bill` 算。
 > 衛生紙、洗衣精、垃圾袋是公用品；餅乾是阿明自己的快樂，不列入公費。
 
 要指給觀眾看的地方：
@@ -95,6 +96,8 @@ Prompt：
 - 公費總額：353 元
 - 每人：88.25 元
 - 小美、冠宇、庭萱各轉阿明 88 元
+- Agent Pipeline：`NLU -> Router -> Skill -> Tools -> Memory`
+- NLU summary：payer 是阿明，三個 shared items，一個 personal item
 - Trace 裡的 `parse_receipt_items`、`split_bill`
 - 如果有 Vertex credentials，Trace 會顯示 `nlu_result.source = vertex_gemini_structured_output`
 - Memory updates：`expense_created`
@@ -189,6 +192,7 @@ Prompt：
 要指給觀眾看的地方：
 
 - 累犯紀錄
+- 累犯依據區塊：memory 讀到的前情提要
 - 累犯指數：`3（累犯加重）`
 - 判決摘要 table
 - LINE message 裡的「本案只審任務，不審人格」

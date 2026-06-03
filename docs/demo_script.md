@@ -8,7 +8,7 @@
 
 > RoomiePeace 不是普通室友聊天室，而是 Skill-based 共居生活協調 Agent。它會先用 Vertex Gemini 或 deterministic fallback 抽出 structured task fields，再判斷 intent、啟動 skill、呼叫 deterministic tools、更新 event-based memory，最後產生 LINE 公告和 trace。
 
-請觀眾注意右側 Agent Trace：
+請觀眾注意 Agent Pipeline、NLU summary 和 Agent Trace：
 
 - `intent`
 - `nlu_result.source`
@@ -36,13 +36,14 @@
 輸入：
 
 ```text
-阿明買了衛生紙129、洗衣精159、餅乾89、垃圾袋65，幫我們分帳。
+今天阿明先幫大家墊了公共用品，衛生紙129元、洗衣精159元、垃圾袋65元，另外餅乾89元是他自己買來快樂的，幫我們分帳並算誰要轉多少。
 ```
 
 預期重點：
 
 - 進入 `receipt-splitter-skill`
 - 有 Vertex credentials 時，`nlu_result.source` 會顯示 `vertex_gemini_structured_output`
+- NLU summary 會顯示 payer 是阿明，抽到三個公用品和一個個人物品
 - `parse_receipt_items` 解析品項
 - `split_bill` 算出公費 353 元
 - 四人平分每人 88.25 元
@@ -99,6 +100,8 @@
 
 - 進入 `roomie-court-skill`
 - 產生案件名稱、證據、判決與理由
+- 顯示累犯依據：背景狀態、家事排班、衝突提醒三筆 memory
+- 累犯指數為 3，啟動加重但不霸凌的處分
 - 明確聲明只是娛樂提醒，不具法律效力
 - Memory 新增 `court_case_created`
 
