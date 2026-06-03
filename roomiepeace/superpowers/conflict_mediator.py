@@ -84,7 +84,7 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
         playful = f"{target}～{target}！水槽裡的碗盤已經堆疊出新的幾何高度，再不洗就要誕生新的生態系了，救救大家！"
         
     # 情境三：噪音/深夜放音樂/大聲講話
-    elif "音樂" in user_input or "吵" in user_input or "聲音" in user_input or "大聲" in user_input:
+    elif "音樂" in user_input or "很吵" in user_input or "聲音" in user_input or "大聲" in user_input:
         topic = "深夜音量控制"
         gentle = f"{target}～不好意思，因為現在時間比較晚了，聲音在房間聽得滿清楚的，方便幫我戴個耳機或關小聲一點嗎？謝謝你！"
         group = f"【共居生活公約】溫馨提醒各位室友，深夜（23:00後）請放低音量、自備耳機，共同維護彼此的睡眠品質，感謝大家！"
