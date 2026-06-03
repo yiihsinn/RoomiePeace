@@ -194,6 +194,7 @@ def init_session_state() -> None:
         "sandbox_result": None,
         "demo_transcript": "",
         "guided_step_id": "",
+        "guided_step_selector": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -217,6 +218,7 @@ def reset_memory_state() -> None:
     st.session_state.sandbox_result = None
     st.session_state.demo_transcript = ""
     st.session_state.guided_step_id = ""
+    st.session_state.guided_step_selector = ""
 
 
 def run_agent(prompt: str, source: str, title: str = "") -> dict[str, Any]:
@@ -234,6 +236,7 @@ def run_demo_step(step: dict[str, str]) -> dict[str, Any]:
     st.session_state.demo_results[step["id"]] = result
     st.session_state.demo_history.append({"step": step, "result": result})
     st.session_state.guided_step_id = step["id"]
+    st.session_state.guided_step_selector = step["id"]
     return result
 
 
@@ -242,6 +245,7 @@ def run_full_demo(steps: list[dict[str, str]]) -> None:
     for step in steps:
         run_demo_step(step)
     st.session_state.guided_step_id = steps[-1]["id"]
+    st.session_state.guided_step_selector = steps[-1]["id"]
     st.session_state.demo_transcript = build_demo_transcript()
 
 
@@ -413,27 +417,22 @@ def render_pipeline_trace(result: dict[str, Any] | None) -> None:
     guardrail_safe = guardrail.get("safe")
 
     nodes = [
-        ("01", "User Input", "自然語言需求", "rp-flow-node-neutral"),
-        ("02", "NLU", nlu_label, f"rp-flow-node-{nlu_tone}"),
-        ("03", "Router", trace.get("intent", result.get("intent", "unknown")), "rp-flow-node-neutral"),
-        ("04", "Skill", trace.get("selected_superpower", result.get("skill", "unknown")), "rp-flow-node-skill"),
-        ("05", "Tools", short_list(tools), "rp-flow-node-tool"),
-        ("06", "Memory", f"{len(memory_updates)} updates", "rp-flow-node-memory"),
-        ("07", "Guardrail", "safe" if guardrail_safe else "check", "rp-flow-node-safe" if guardrail_safe else "rp-flow-node-warn"),
-        ("08", "Output", "LINE / tables / markdown", "rp-flow-node-output"),
+        ("01", "AI Understands", f"{nlu_label} · {display_value(nlu.get('intent'))}", f"rp-flow-node-{nlu_tone}"),
+        ("02", "Router Selects", trace.get("selected_superpower", result.get("skill", "unknown")), "rp-flow-node-skill"),
+        ("03", "Tools Execute", f"{len(tools)} deterministic tools" if tools else "No tool call", "rp-flow-node-tool"),
+        (
+            "04",
+            "Memory + Safety",
+            f"{len(memory_updates)} updates · {'safe' if guardrail_safe else 'check'}",
+            "rp-flow-node-safe" if guardrail_safe else "rp-flow-node-warn",
+        ),
     ]
-    cards = []
-    for number, label, value, class_name in nodes:
-        cards.append(
-            f"""
-            <div class="rp-flow-node {class_name}">
-              <div class="rp-flow-number">{escape(number)}</div>
-              <div class="rp-flow-label">{escape(label)}</div>
-              <div class="rp-flow-value">{escape(display_value(value))}</div>
-            </div>
-            """
-        )
-    st.markdown(f"<div class='rp-pipeline'>{''.join(cards)}</div>", unsafe_allow_html=True)
+    cols = st.columns(len(nodes))
+    for col, (number, label, value, _class_name) in zip(cols, nodes):
+        with col:
+            with st.container(border=True):
+                st.caption(f"{number} · {label}")
+                st.markdown(f"**{display_value(value)}**")
 
 
 def render_nlu_summary(result: dict[str, Any] | None) -> None:
@@ -449,24 +448,22 @@ def render_nlu_summary(result: dict[str, Any] | None) -> None:
     actor = data.get("payer") or data.get("target") or "—"
     topic = data.get("topic") or ("分帳" if nlu.get("intent") == "receipt_splitter" else "—")
     cards = [
-        ("NLU source", status_chip(nlu_label, nlu_tone)),
-        ("Intent", f"<code>{escape(display_value(nlu.get('intent')))}</code>"),
-        ("Confidence", escape(display_value(confidence))),
-        ("Actor / target", escape(display_value(actor))),
-        ("Topic", escape(display_value(topic))),
-        ("Tone", escape(display_value(data.get("tone", "funny but polite")))),
+        ("NLU source", nlu_label),
+        ("Intent", display_value(nlu.get("intent"))),
+        ("Confidence", display_value(confidence)),
+        ("Actor / target", display_value(actor)),
+        ("Topic", display_value(topic)),
+        ("Tone", display_value(data.get("tone", "funny but polite"))),
     ]
-    rendered_cards = []
-    for label, value in cards:
-        rendered_cards.append(
-            f"""
-            <div class="rp-insight-card">
-              <div class="rp-insight-label">{escape(label)}</div>
-              <div class="rp-insight-value">{value}</div>
-            </div>
-            """
-        )
-    st.markdown(f"<div class='rp-insight-grid'>{''.join(rendered_cards)}</div>", unsafe_allow_html=True)
+    cols = st.columns(3)
+    for index, (label, value) in enumerate(cards):
+        with cols[index % 3]:
+            with st.container(border=True):
+                st.caption(label)
+                if label == "NLU source":
+                    st.markdown(status_chip(value, nlu_tone), unsafe_allow_html=True)
+                else:
+                    st.markdown(f"**{value}**")
 
     missing_fields = nlu.get("missing_fields", [])
     if missing_fields:
@@ -501,21 +498,11 @@ def render_roomie_court_memory_evidence(result: dict[str, Any]) -> None:
     if not prior_records:
         return
 
-    evidence_cards = []
-    for index, record in enumerate(prior_records, start=1):
-        evidence_cards.append(
-            f"""
-            <div class="rp-evidence-card">
-              <div class="rp-evidence-index">{index}</div>
-              <div>
-                <div class="rp-evidence-type">{escape(display_value(record.get('類型')))}</div>
-                <div class="rp-evidence-text">{escape(display_value(record.get('內容')))}</div>
-              </div>
-            </div>
-            """
-        )
     st.markdown("**累犯依據：Memory 讀到的前情提要**")
-    st.markdown(f"<div class='rp-evidence-grid'>{''.join(evidence_cards)}</div>", unsafe_allow_html=True)
+    for index, record in enumerate(prior_records, start=1):
+        with st.container(border=True):
+            st.caption(f"{index} · {display_value(record.get('類型'))}")
+            st.markdown(f"**{display_value(record.get('內容'))}**")
 
 
 def render_demo_metrics(steps: list[dict[str, str]]) -> None:
@@ -531,26 +518,29 @@ def render_demo_metrics(steps: list[dict[str, str]]) -> None:
 
 
 def render_demo_step_rail(steps: list[dict[str, str]], current_step_id: str) -> None:
-    for index, step in enumerate(steps, start=1):
-        result = st.session_state.demo_results.get(step["id"])
-        status, tone = route_status(result, step)
-        button_label = f"{index}. {step['title']}"
-        if st.button(button_label, key=f"select_step_{step['id']}", use_container_width=True):
-            st.session_state.guided_step_id = step["id"]
-            st.rerun()
-        current_class = " rp-step-current" if step["id"] == current_step_id else ""
-        st.markdown(
-            f"""
-            <div class="rp-step-card{current_class}">
-              <div class="rp-step-row">
-                <strong>{index}</strong>
-                {status_chip(status, tone)}
-              </div>
-              <div class="rp-step-title">{step['title']}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    step_ids = [step["id"] for step in steps]
+    step_by_id = {step["id"]: step for step in steps}
+    step_index = {step["id"]: index for index, step in enumerate(steps, start=1)}
+    if st.session_state.guided_step_selector not in step_ids:
+        st.session_state.guided_step_selector = current_step_id
+
+    def label_for(step_id: str) -> str:
+        step = step_by_id[step_id]
+        result = st.session_state.demo_results.get(step_id)
+        status, _tone = route_status(result, step)
+        return f"{step_index[step_id]}. {step['title']} · {status}"
+
+    selected_step_id = st.radio(
+        "Demo steps",
+        options=step_ids,
+        index=max(0, step_ids.index(st.session_state.guided_step_selector)),
+        format_func=label_for,
+        label_visibility="collapsed",
+        key="guided_step_selector",
+    )
+    if selected_step_id != current_step_id:
+        st.session_state.guided_step_id = selected_step_id
+        st.rerun()
 
 
 def render_selected_demo_step(index: int, step: dict[str, str]) -> None:
@@ -596,17 +586,16 @@ def render_selected_demo_step(index: int, step: dict[str, str]) -> None:
     actual_cols[1].metric("Actual skill", trace.get("selected_superpower", "unknown"))
     actual_cols[2].metric("Memory updates", len(trace.get("memory_updates", [])))
 
-    st.markdown("**Agent Pipeline**")
+    st.markdown("**Execution Overview**")
     render_pipeline_trace(result)
-    with st.expander("NLU extraction summary", expanded=True):
+
+    st.subheader("Output")
+    render_result(result, key_prefix=f"demo_focus_{step['id']}")
+
+    with st.expander("AI extraction details", expanded=False):
         render_nlu_summary(result)
 
-    output_col, trace_col = st.columns([0.62, 0.38], gap="large")
-    with output_col:
-        st.subheader("Output")
-        render_result(result, key_prefix=f"demo_focus_{step['id']}")
-    with trace_col:
-        st.subheader("Trace")
+    with st.expander("Memory updates and raw Agent Trace", expanded=False):
         st.markdown("**Memory updates**")
         render_memory_updates(result)
         st.markdown("**Agent Trace**")
@@ -689,7 +678,7 @@ def render_guided_demo_tab() -> None:
             st.session_state.demo_transcript = ""
             st.rerun()
     with control_cols[2]:
-        if st.button("Run full demo", type="primary", use_container_width=True):
+        if st.button("Run full demo", use_container_width=True):
             run_full_demo(steps)
             st.rerun()
     with control_cols[3]:
@@ -855,6 +844,18 @@ def main() -> None:
           box-shadow: 0 8px 18px rgba(33, 49, 90, 0.12);
           border-color: #5b77d6;
         }
+        .stButton > button[kind="primary"],
+        button[data-testid="stBaseButton-primary"] {
+          background: #256b73 !important;
+          border-color: #256b73 !important;
+          color: #ffffff !important;
+        }
+        .stButton > button[kind="primary"]:hover,
+        button[data-testid="stBaseButton-primary"]:hover {
+          background: #1f5b62 !important;
+          border-color: #1f5b62 !important;
+          box-shadow: 0 8px 20px rgba(37, 107, 115, 0.22);
+        }
         .stButton > button:active {
           transform: translateY(0);
         }
@@ -908,36 +909,19 @@ def main() -> None:
           border-color: #aab9d6;
           box-shadow: 0 9px 24px rgba(32, 43, 70, 0.08);
         }
-        .rp-step-card {
-          margin: 0.35rem 0 0.85rem;
-          padding: 0.7rem 0.75rem;
+        div[role="radiogroup"] label {
           border: 1px solid #dce3ee;
           border-radius: 8px;
+          padding: 0.56rem 0.64rem;
+          margin-bottom: 0.42rem;
           background: #ffffff;
-          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
-          cursor: default;
+          transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
         }
-        .rp-step-card:hover {
-          transform: translateX(3px);
-          border-color: #9eb1d9;
+        div[role="radiogroup"] label:hover {
+          transform: translateX(2px);
+          border-color: #97abc9;
           background: #fbfcff;
-          box-shadow: 0 8px 22px rgba(32, 43, 70, 0.08);
-        }
-        .rp-step-current {
-          border-color: #4466d8;
-          box-shadow: 0 0 0 1px rgba(68, 102, 216, 0.12);
-        }
-        .rp-step-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.35rem;
-        }
-        .rp-step-title {
-          color: #25324a;
-          font-weight: 650;
-          line-height: 1.35;
+          box-shadow: 0 8px 18px rgba(32, 43, 70, 0.07);
         }
         .rp-demo-stage {
           margin-bottom: 1rem;
@@ -969,13 +953,13 @@ def main() -> None:
         }
         .rp-pipeline {
           display: grid;
-          grid-template-columns: repeat(8, minmax(0, 1fr));
-          gap: 0.55rem;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.7rem;
           margin: 0.45rem 0 1rem;
         }
         .rp-flow-node {
-          min-height: 6.3rem;
-          padding: 0.68rem 0.62rem;
+          min-height: 5.5rem;
+          padding: 0.78rem 0.82rem;
           border: 1px solid #dfe6f0;
           border-radius: 8px;
           background: #ffffff;
@@ -1101,7 +1085,7 @@ def main() -> None:
         }
         @media (max-width: 1100px) {
           .rp-pipeline {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .rp-insight-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
