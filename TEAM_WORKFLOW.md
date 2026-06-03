@@ -13,7 +13,7 @@
 | E | Karma Report Skill | `roomiepeace/superpowers/karma_report.py`, `roomiepeace/tools/karma_tools.py` | Karma 計分、排行榜、稱號、共居狀態 |
 | F | UI / Dashboard | `app.py`, `docs/demo_script.md` if needed | Guided Demo、Skill Sandbox、Dashboard 體驗 |
 | G | Integration / Router / Memory / Trace | `roomiepeace/agent.py`, `roomiepeace/nlu.py`, `roomiepeace/router.py`, `roomiepeace/memory.py`, `roomiepeace/trace.py`, `data/memory.json` | Gemini NLU、agent flow、router、event memory、trace、整合測試 |
-| H | Demo / PPT / Video / Evaluation | `data/demo_scenarios.json`, `docs/demo_flow_v2.md`, `docs/project_overview.md`, `README.md`, `docs/evaluation_plan.md` | demo 講稿、錄影順序、PPT 素材、評測方式 |
+| H | Demo / PPT / Video / Evaluation | `data/demo_scenarios.json`, `data/demo_nlu_cache.json`, `docs/demo_flow_v2.md`, `docs/project_overview.md`, `README.md`, `docs/evaluation_plan.md` | demo 講稿、Gemini demo cache、錄影順序、PPT 素材、評測方式 |
 
 `line_announcement.py` 是 demo 整合 skill，建議由 G 或 H 維護，因為它會讀取前面步驟產生的 memory。
 
@@ -23,7 +23,8 @@
 
 ```text
 User input
-  -> Vertex Gemini NLU extraction if configured
+  -> cached Gemini demo extraction if prompt is in data/demo_nlu_cache.json
+  -> Vertex Gemini NLU extraction if configured and cache misses
   -> deterministic fallback if needed
   -> Router
   -> selected Superpower / Skill
@@ -34,6 +35,8 @@ User input
 ```
 
 如果只是改現有 skill，通常不需要碰 `app.py`、`agent.py` 或 `router.py`。
+
+正式 demo 的 7 個 prompts 會優先使用 `data/demo_nlu_cache.json`，所以沒有 API key 的隊友也能看到 `Cached Gemini` NLU 結果，demo 不需要等即時 API。H 如果修改 `data/demo_scenarios.json` 裡的 prompt，要同步更新 `data/demo_nlu_cache.json`。
 
 ## 每個人主要改哪裡
 

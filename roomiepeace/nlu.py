@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ INTENT_TO_SKILL = {
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEMO_NLU_CACHE_PATH = PROJECT_ROOT / "data" / "demo_nlu_cache.json"
 
 
 @dataclass
@@ -109,6 +111,9 @@ GEMINI_NLU_SCHEMA: dict[str, Any] = {
 
 def extract_task(user_input: str, roommates: list[str]) -> NLUResult:
     _load_dotenv()
+    cached_result = _extract_from_demo_cache(user_input)
+    if cached_result:
+        return cached_result
     if _vertex_env_ready():
         gemini_result = _extract_with_vertex_gemini(user_input, roommates)
         if gemini_result:
@@ -242,6 +247,59 @@ User input:
         missing_fields=missing_fields,
         notes=parsed.get("notes", ""),
     )
+
+
+def _extract_from_demo_cache(user_input: str) -> NLUResult | None:
+    if os.getenv("ROOMIEPEACE_DISABLE_DEMO_NLU_CACHE") == "1":
+        return None
+
+    entry = _load_demo_nlu_cache().get(_normalize_prompt(user_input))
+    if not entry:
+        return None
+
+    data = entry.get("data", {})
+    return NLUResult(
+        intent=entry.get("intent", "unknown"),
+        confidence=float(entry.get("confidence", 0)),
+        data={
+            "payer": data.get("payer", ""),
+            "items": [
+                {
+                    "name": item.get("name", ""),
+                    "amount": _safe_float(item.get("amount", 0)),
+                    "classification": item.get("classification", "unknown"),
+                }
+                for item in data.get("items", [])
+                if item.get("name") and _safe_float(item.get("amount", 0)) > 0
+            ],
+            "target": data.get("target", ""),
+            "topic": data.get("topic", ""),
+            "tone": data.get("tone", "funny but polite"),
+        },
+        source="cached_vertex_gemini_structured_output",
+        missing_fields=list(entry.get("missing_fields", [])),
+        notes=entry.get("notes", "Cached Gemini extraction for demo replay."),
+    )
+
+
+@lru_cache(maxsize=1)
+def _load_demo_nlu_cache() -> dict[str, dict[str, Any]]:
+    try:
+        with DEMO_NLU_CACHE_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    entries: dict[str, dict[str, Any]] = {}
+    for entry in payload.get("entries", []):
+        prompt = entry.get("prompt", "")
+        if prompt:
+            entries[_normalize_prompt(prompt)] = entry
+    return entries
+
+
+def _normalize_prompt(text: str) -> str:
+    return " ".join(text.strip().split())
 
 
 def _load_dotenv() -> None:

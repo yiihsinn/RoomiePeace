@@ -194,7 +194,6 @@ def init_session_state() -> None:
         "sandbox_result": None,
         "demo_transcript": "",
         "guided_step_id": "",
-        "guided_step_selector": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -218,7 +217,7 @@ def reset_memory_state() -> None:
     st.session_state.sandbox_result = None
     st.session_state.demo_transcript = ""
     st.session_state.guided_step_id = ""
-    st.session_state.guided_step_selector = ""
+    st.session_state.pop("guided_step_selector", None)
 
 
 def run_agent(prompt: str, source: str, title: str = "") -> dict[str, Any]:
@@ -236,7 +235,6 @@ def run_demo_step(step: dict[str, str]) -> dict[str, Any]:
     st.session_state.demo_results[step["id"]] = result
     st.session_state.demo_history.append({"step": step, "result": result})
     st.session_state.guided_step_id = step["id"]
-    st.session_state.guided_step_selector = step["id"]
     return result
 
 
@@ -396,6 +394,8 @@ def short_list(values: list[Any], limit: int = 3) -> str:
 
 
 def nlu_source_label(source: str) -> tuple[str, str]:
+    if source == "cached_vertex_gemini_structured_output":
+        return "Cached Gemini", "ai"
     if source == "vertex_gemini_structured_output":
         return "Vertex Gemini", "ai"
     if "fallback" in source:
@@ -521,7 +521,7 @@ def render_demo_step_rail(steps: list[dict[str, str]], current_step_id: str) -> 
     step_ids = [step["id"] for step in steps]
     step_by_id = {step["id"]: step for step in steps}
     step_index = {step["id"]: index for index, step in enumerate(steps, start=1)}
-    if st.session_state.guided_step_selector not in step_ids:
+    if st.session_state.get("guided_step_selector") not in step_ids:
         st.session_state.guided_step_selector = current_step_id
 
     def label_for(step_id: str) -> str:
@@ -573,8 +573,9 @@ def render_selected_demo_step(index: int, step: dict[str, str]) -> None:
     run_cols = st.columns([1, 3])
     with run_cols[0]:
         if st.button("Run this step", type="primary", key=f"run_current_{step['id']}", use_container_width=True):
-            result = run_demo_step(step)
+            run_demo_step(step)
             st.session_state.demo_transcript = ""
+            st.rerun()
 
     if not result:
         st.info("這一步還沒跑。上台 demo 時先確認 prompt，再按 Run this step。")

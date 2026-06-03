@@ -13,6 +13,7 @@ streamlit run app.py
 2. 進入 `Guided Demo`
 3. 按 `Reset demo memory`
 4. 確認步驟內的 Agent Pipeline、NLU summary 和 Agent Trace 會顯示 intent、skill、tools、memory updates
+5. 正式 demo 的固定 prompts 會讀 `data/demo_nlu_cache.json`，畫面顯示 `Cached Gemini`，所以沒有 API key 也不用等 Vertex
 
 ## 影片錄製順序
 
@@ -62,7 +63,7 @@ Prompt：
 - Expected intent：`receipt_splitter`
 - Expected skill：`receipt-splitter-skill`
 - Agent Pipeline 顯示 `NLU -> Router -> Skill -> Tools -> Memory`
-- NLU summary 顯示 `vertex_gemini_structured_output`、payer、items、classification
+- NLU summary 顯示 `Cached Gemini`、payer、items、classification
 - 表格顯示品項分類
 - 公費總額 353 元
 - 四人平分每人 88.25 元

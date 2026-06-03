@@ -163,10 +163,11 @@ http://localhost:8501
 8. 如需交給 H 做影片或 PPT，按 `Export demo transcript`
 
 Guided Demo 的文案在 `data/demo_scenarios.json`，H 可以直接改 JSON，不需要改 `app.py`。
+Guided Demo 的 Gemini structured extraction 快取在 `data/demo_nlu_cache.json`，沒有 Vertex credentials 的隊友也能看到 demo 用的 `Cached Gemini` NLU 結果，而且正式 demo 不用等 API。
 
 ## Vertex Gemini NLU
 
-這版支援 optional Vertex Gemini extraction。`.env` 有以下設定時，Agent 會先用 Gemini 把使用者自然語言抽成 structured task fields：
+這版支援 optional Vertex Gemini extraction。`.env` 有以下設定時，自由輸入或 cache 未命中的 prompt 會用 Gemini 把使用者自然語言抽成 structured task fields：
 
 ```text
 GOOGLE_GENAI_USE_VERTEXAI=true
@@ -203,6 +204,22 @@ Gemini 負責理解欄位，Tools 負責正確計算，Memory 負責狀態，Gua
 ```
 
 如果沒有 Vertex credentials，或 Gemini extraction 失敗，系統會退回 deterministic fallback，demo 仍然可以跑。
+
+### Cached Gemini Demo Replay
+
+為了讓沒有 API 的隊友也能看到目前 demo 成果，Guided Demo 的 7 個固定 prompts 會先讀取 `data/demo_nlu_cache.json`。Trace 會顯示：
+
+```text
+nlu_result.source = cached_vertex_gemini_structured_output
+```
+
+畫面上會顯示 `Cached Gemini`。這代表「Gemini structured extraction 已預先保存」，不是現場打 API。後面的分帳計算、排班、累犯加重、memory update 和 guardrail 仍然是程式即時執行。
+
+如果要強制測 live Vertex Gemini，可以暫時設定：
+
+```bash
+ROOMIEPEACE_DISABLE_DEMO_NLU_CACHE=1 streamlit run app.py
+```
 
 ## Skill Owner 測試方式
 

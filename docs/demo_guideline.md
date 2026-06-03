@@ -35,8 +35,9 @@ Reset demo memory
 
 > 我們的題目是 RoomiePeace Superpowers。它不是一般室友聊天 app，而是 skill-based agent。
 > 我們有接 Vertex Gemini 做 NLU extraction：Gemini 先把自然語言抽成 payer、items、target、topic 這些 structured fields。
+> 正式 demo 為了穩定與不等 API，這 7 個 demo prompts 會使用預先存好的 Gemini structured extraction cache，所以沒有 API key 的隊友也能看到同樣效果。
 > 接著 skill 會呼叫 deterministic tools 做計算、排班、累犯判斷和 memory 更新。
-> 等一下大家可以看 Guided Demo 裡的 Agent Pipeline 和 NLU summary：每一步都會顯示 Gemini 或 fallback 如何抽欄位、router 判斷出的 intent、選到哪個 skill、呼叫哪些 tools、更新哪些 memory。
+> 等一下大家可以看 Guided Demo 裡的 Agent Pipeline 和 NLU summary：每一步都會顯示 Cached Gemini、live Gemini 或 fallback 如何抽欄位、router 判斷出的 intent、選到哪個 skill、呼叫哪些 tools、更新哪些 memory。
 > 今天故事線叫「冠宇與垃圾桶事件」，主角不是壞人，只是跟倒垃圾任務有一段不太健康的遠距離關係。
 
 畫面操作：
@@ -99,7 +100,8 @@ Prompt：
 - Agent Pipeline：`NLU -> Router -> Skill -> Tools -> Memory`
 - NLU summary：payer 是阿明，三個 shared items，一個 personal item
 - Trace 裡的 `parse_receipt_items`、`split_bill`
-- 如果有 Vertex credentials，Trace 會顯示 `nlu_result.source = vertex_gemini_structured_output`
+- 正式 demo 通常會顯示 `nlu_result.source = cached_vertex_gemini_structured_output`，代表用預先保存的 Gemini 抽欄位結果，不用等 API
+- 如果關掉 cache 且有 Vertex credentials，Trace 會顯示 `nlu_result.source = vertex_gemini_structured_output`
 - Memory updates：`expense_created`
 
 小笑點：
