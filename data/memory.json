@@ -6,22 +6,398 @@
     "庭萱"
   ],
   "constraints": {
-    "小美": "本週期中考",
     "阿明": "週三晚上不在",
+    "小美": "這週期中考",
     "冠宇": "常常忘記倒垃圾",
     "庭萱": "無特殊限制"
   },
   "inventory": {
-    "衛生紙": "剩1包",
-    "垃圾袋": "已用完",
-    "洗衣精": "剩30%"
+    "衛生紙": "剛補貨",
+    "垃圾袋": "剛補貨",
+    "洗衣精": "剛補貨"
   },
-  "expenses": [],
+  "expenses": [
+    {
+      "timestamp": "2026-06-04T01:53:26",
+      "payer": "阿明",
+      "classified_items": [
+        {
+          "name": "衛生紙",
+          "amount": 129.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "洗衣精",
+          "amount": 159.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "餅乾",
+          "amount": 89.0,
+          "classification": "personal",
+          "owner": "阿明",
+          "split_members": [
+            "阿明"
+          ]
+        },
+        {
+          "name": "垃圾袋",
+          "amount": 65.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        }
+      ],
+      "shared_items": [
+        {
+          "name": "衛生紙",
+          "amount": 129.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "洗衣精",
+          "amount": 159.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "垃圾袋",
+          "amount": 65.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        }
+      ],
+      "personal_items": [
+        {
+          "name": "餅乾",
+          "amount": 89.0,
+          "classification": "personal",
+          "owner": "阿明",
+          "split_members": [
+            "阿明"
+          ]
+        }
+      ],
+      "shared_total": 353.0,
+      "personal_total": 89.0,
+      "per_person": 88.25,
+      "transfer_amount": 88,
+      "transfers": [
+        {
+          "from": "小美",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        },
+        {
+          "from": "冠宇",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        },
+        {
+          "from": "庭萱",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        }
+      ],
+      "split_members": [
+        "阿明",
+        "小美",
+        "冠宇",
+        "庭萱"
+      ]
+    },
+    {
+      "timestamp": "2026-06-04T01:53:30",
+      "payer": "阿明",
+      "classified_items": [
+        {
+          "name": "衛生紙",
+          "amount": 129.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "洗衣精",
+          "amount": 159.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "餅乾",
+          "amount": 89.0,
+          "classification": "personal",
+          "owner": "阿明",
+          "split_members": [
+            "阿明"
+          ]
+        },
+        {
+          "name": "垃圾袋",
+          "amount": 65.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        }
+      ],
+      "shared_items": [
+        {
+          "name": "衛生紙",
+          "amount": 129.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "洗衣精",
+          "amount": 159.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        },
+        {
+          "name": "垃圾袋",
+          "amount": 65.0,
+          "classification": "shared",
+          "owner": null,
+          "split_members": [
+            "阿明",
+            "小美",
+            "冠宇",
+            "庭萱"
+          ]
+        }
+      ],
+      "personal_items": [
+        {
+          "name": "餅乾",
+          "amount": 89.0,
+          "classification": "personal",
+          "owner": "阿明",
+          "split_members": [
+            "阿明"
+          ]
+        }
+      ],
+      "shared_total": 353.0,
+      "personal_total": 89.0,
+      "per_person": 88.25,
+      "transfer_amount": 88,
+      "transfers": [
+        {
+          "from": "小美",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        },
+        {
+          "from": "冠宇",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        },
+        {
+          "from": "庭萱",
+          "to": "阿明",
+          "amount": 88,
+          "raw_amount": 88.25
+        }
+      ],
+      "split_members": [
+        "阿明",
+        "小美",
+        "冠宇",
+        "庭萱"
+      ]
+    }
+  ],
   "chores": [],
   "court_cases": [],
-  "events": [],
+  "events": [
+    {
+      "event_type": "roommate_setup_updated",
+      "timestamp": "2026-06-04T01:53:17",
+      "actor": "system",
+      "data": {
+        "roommates": [
+          "阿明",
+          "小美",
+          "冠宇",
+          "庭萱"
+        ],
+        "constraints": {
+          "阿明": "週三晚上不在",
+          "小美": "這週期中考",
+          "冠宇": "常常忘記倒垃圾"
+        }
+      }
+    },
+    {
+      "event_type": "roommate_setup_updated",
+      "timestamp": "2026-06-04T01:53:21",
+      "actor": "system",
+      "data": {
+        "roommates": [
+          "阿明",
+          "小美",
+          "冠宇",
+          "庭萱"
+        ],
+        "constraints": {
+          "阿明": "週三晚上不在",
+          "小美": "這週期中考",
+          "冠宇": "常常忘記倒垃圾"
+        }
+      }
+    },
+    {
+      "event_type": "expense_created",
+      "timestamp": "2026-06-04T01:53:26",
+      "actor": "阿明",
+      "data": {
+        "items": [
+          "衛生紙",
+          "洗衣精",
+          "垃圾袋"
+        ],
+        "shared_total": 353.0,
+        "split_members": [
+          "阿明",
+          "小美",
+          "冠宇",
+          "庭萱"
+        ],
+        "transfers": [
+          {
+            "from": "小美",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          },
+          {
+            "from": "冠宇",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          },
+          {
+            "from": "庭萱",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "expense_created",
+      "timestamp": "2026-06-04T01:53:30",
+      "actor": "阿明",
+      "data": {
+        "items": [
+          "衛生紙",
+          "洗衣精",
+          "垃圾袋"
+        ],
+        "shared_total": 353.0,
+        "split_members": [
+          "阿明",
+          "小美",
+          "冠宇",
+          "庭萱"
+        ],
+        "transfers": [
+          {
+            "from": "小美",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          },
+          {
+            "from": "冠宇",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          },
+          {
+            "from": "庭萱",
+            "to": "阿明",
+            "amount": 88,
+            "raw_amount": 88.25
+          }
+        ]
+      }
+    }
+  ],
   "karma": {
-    "阿明": 80,
+    "阿明": 84,
     "小美": 76,
     "冠宇": 43,
     "庭萱": 88
