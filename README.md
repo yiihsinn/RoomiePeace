@@ -38,7 +38,7 @@ User input
 - `data/demo_scenarios.json`：Guided Demo 故事線
 - `data/memory.json`：seed memory
 - `TEAM_WORKFLOW.md`：八人協作必讀
-- `docs/`：demo、skill contract、evaluation 文件
+- `docs/`：demo guideline、skill contract、evaluation 文件
 - `tests/`：基本測試
 
 ## UI 模式

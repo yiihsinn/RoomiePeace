@@ -125,13 +125,14 @@ Prompt：
 
 講稿：
 
-> 第五步是 demo 高潮：室友法庭。它會把糾紛包裝成娛樂判決，但明確聲明不具法律效力，避免真的法律風險。
+> 第五步是 demo 高潮：室友法庭。注意這裡不是突然罵冠宇，而是讀前面 memory：他本來就被標記常忘記倒垃圾、剛剛被排到倒垃圾、又被提醒一次，所以系統判定累犯指數 3，進入累犯加重。加重的是任務，不是人格。
 
 預期畫面：
 
 - Expected intent：`roomie_court`
 - Expected skill：`roomie-court-skill`
-- 顯示案件名稱、被告、證據、判決、判決理由
+- 顯示案件名稱、被告、證據、累犯紀錄、累犯指數、判決、判決理由
+- 累犯指數顯示 `3（累犯加重）`
 - LINE message 包含娛樂判決聲明
 - Memory updates 顯示 `court_case_created`
 
@@ -151,8 +152,8 @@ Prompt：
 
 - Expected intent：`line_announcement`
 - Expected skill：`line-announcement-skill`
-- LINE message 有分帳、家事、系統提醒
-- Tables 顯示家事與分帳項目
+- LINE message 有分帳、家事、系統提醒、室友法庭加重處分
+- Tables 顯示家事、分帳項目與室友法庭摘要
 - Memory updates 顯示 `line_announcement_created`
 
 ## Step 7：Karma 排行榜

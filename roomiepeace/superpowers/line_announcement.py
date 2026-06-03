@@ -21,10 +21,16 @@ def _latest_chores(memory_snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     return chores[-1].get("assignments", [])
 
 
+def _latest_court_case(memory_snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    court_cases = memory_snapshot.get("court_cases", [])
+    return court_cases[-1] if court_cases else None
+
+
 def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
     snapshot = memory.snapshot()
     expense = _latest_expense(snapshot)
     chores = _latest_chores(snapshot)
+    court_case = _latest_court_case(snapshot)
     disaster_index = calculate_garbage_disaster_index(snapshot)
 
     sections = ["【本週 RoomiePeace 公告】"]
@@ -59,7 +65,18 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
     else:
         trash_line = f"垃圾桶目前可控，請{trash_assignee}照排班完成即可。"
 
-    sections.extend(["", "3. 系統提醒", trash_line, "", "提醒：分帳只提供建議，請大家自行確認後轉帳。"])
+    sections.extend(["", "3. 系統提醒", trash_line])
+    if court_case:
+        sections.extend(
+            [
+                "",
+                "4. 室友法庭",
+                f"{court_case['defendant']}累犯指數：{court_case.get('recidivism_count', 0)}（{court_case.get('escalation_label', '提醒')}）。",
+                court_case["penalty"],
+                "本案只審任務，不審人格；室友法庭不具法律效力。",
+            ]
+        )
+    sections.extend(["", "提醒：分帳只提供建議，請大家自行確認後轉帳。"])
     line_message = "\n".join(sections)
     event = memory.record_announcement("本週 RoomiePeace 公告")
 
@@ -74,6 +91,13 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
     tables = {"家事": [{"負責人": item["assignee"], "任務": item["task"]} for item in chores]}
     if expense_table:
         tables["分帳項目"] = expense_table
+    if court_case:
+        tables["室友法庭"] = [
+            {"欄位": "被告", "內容": court_case["defendant"]},
+            {"欄位": "累犯指數", "內容": court_case.get("recidivism_count", 0)},
+            {"欄位": "加重等級", "內容": court_case.get("escalation_label", "提醒")},
+            {"欄位": "處分", "內容": court_case["penalty"]},
+        ]
 
     return {
         "intent": "line_announcement",
@@ -81,6 +105,6 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
         "response_markdown": markdown,
         "line_message": line_message,
         "tables": tables,
-        "tools_used": ["latest_expense", "latest_chores", "calculate_garbage_disaster_index"],
+        "tools_used": ["latest_expense", "latest_chores", "latest_court_case", "calculate_garbage_disaster_index"],
         "memory_updates": [f"line_announcement_created event @ {event['timestamp']}"],
     }
