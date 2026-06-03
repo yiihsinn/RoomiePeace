@@ -90,10 +90,11 @@ def _build_evidence(memory_snapshot: dict[str, Any], defendant: str, topic: str)
     return evidence[:3]
 
 
-def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
+def handle(user_input: str, memory: MemoryStore, nlu_data: dict[str, Any] | None = None) -> dict[str, Any]:
     snapshot = memory.snapshot()
-    defendant = extract_target(user_input, snapshot["roommates"])
-    topic = extract_topic(user_input)
+    nlu_data = nlu_data or {}
+    defendant = nlu_data.get("target") or extract_target(user_input, snapshot["roommates"])
+    topic = nlu_data.get("topic") or extract_topic(user_input)
     prior_records = _count_prior_incidents(snapshot, defendant, topic)
     recidivism_count = len(prior_records)
     escalation_label = _escalation_label(recidivism_count)

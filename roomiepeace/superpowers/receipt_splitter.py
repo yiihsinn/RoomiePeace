@@ -9,11 +9,12 @@ from ..tools.bill_tools import detect_payer, parse_receipt_items, split_bill
 from ..tools.text_tools import join_names
 
 
-def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
+def handle(user_input: str, memory: MemoryStore, nlu_data: dict[str, Any] | None = None) -> dict[str, Any]:
     snapshot = memory.snapshot()
     roommates = snapshot["roommates"]
-    payer = detect_payer(user_input, roommates)
-    items = parse_receipt_items(user_input)
+    nlu_data = nlu_data or {}
+    payer = nlu_data.get("payer") or detect_payer(user_input, roommates)
+    items = nlu_data.get("items") or parse_receipt_items(user_input)
     split = split_bill(items, payer, roommates)
 
     # 1. 記錄事件到 Event Log (Memory)

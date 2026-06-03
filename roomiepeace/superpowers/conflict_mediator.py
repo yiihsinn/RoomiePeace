@@ -37,7 +37,7 @@ def _analyze_risk(text: str) -> tuple[int, str]:
     return final_score, analysis_text
 
 
-def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
+def handle(user_input: str, memory: MemoryStore, nlu_data: dict[str, Any] | None = None) -> dict[str, Any]:
     # 1. 執行 Guardrail 安全檢查
     safety = guardrail_check(user_input)
     if not safety["safe"]:
@@ -54,8 +54,9 @@ def handle(user_input: str, memory: MemoryStore) -> dict[str, Any]:
 
     # 2. 解析內容與計算風險
     snapshot = memory.snapshot()
-    target = extract_target(user_input, snapshot["roommates"])
-    topic = extract_topic(user_input)
+    nlu_data = nlu_data or {}
+    target = nlu_data.get("target") or extract_target(user_input, snapshot["roommates"])
+    topic = nlu_data.get("topic") or extract_topic(user_input)
     
     # 修正：如果工具沒抓到明確主題，給予一個體面的預設值
     if not topic or topic == "共居任務":

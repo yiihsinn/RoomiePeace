@@ -19,7 +19,7 @@ PERSONAL_ITEM_KEYWORDS = [
 
 def detect_payer(text: str, roommates: list[str]) -> str:
     # 優化：允許名字前後有空格，且支援 1 到 10 個字的名字
-    match = re.search(r"([一-龥A-Za-z1-9]{1,10})\s*買了", text)
+    match = re.search(r"([一-龥A-Za-z1-9]{1,10})\s*(?:買了|幫大家買|先墊了?|墊了|付了|出了)", text)
     if match and match.group(1).strip() in roommates:
         return match.group(1).strip()
 
@@ -32,19 +32,33 @@ def detect_payer(text: str, roommates: list[str]) -> str:
 def parse_receipt_items(text: str) -> list[dict[str, Any]]:
     """Extract item-price pairs from natural Chinese text."""
     segment = text
-    if "買了" in text:
-        segment = text.split("買了", 1)[1]
-    
+    for marker in ["買了", "幫大家買", "先墊了", "先墊", "墊了", "付了", "出了"]:
+        if marker in text:
+            segment = text.split(marker, 1)[1]
+            break
+
     # 增加切分標點符號的容錯
     segment = re.split(r"[，,。；;]\s*(?:幫|請|麻煩|可以|分帳|算)", segment, maxsplit=1)[0]
     segment = segment.replace("，", "、").replace(",", "、").replace("；", "、")
 
     items: list[dict[str, Any]] = []
-    for chunk in [part.strip() for part in segment.split("、") if part.strip()]:
+    known_items = sorted(SHARED_ITEM_KEYWORDS + PERSONAL_ITEM_KEYWORDS, key=len, reverse=True)
+    known_pattern = "|".join(re.escape(item) for item in known_items)
+
+    for chunk in _split_receipt_chunks(segment):
         # 進階正則：捕捉「品項(限定名字)100」或「品項100」
         # 範例：衛生紙(小美,庭萱,阿明)129元 -> group(1)="衛生紙(小美,庭萱,阿明)", group(2)="129"
         match = re.search(r"(.+?)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:元)?$", chunk)
         if not match:
+            if known_pattern:
+                for known_match in re.finditer(rf"({known_pattern})\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:元)?", chunk):
+                    items.append(
+                        {
+                            "name": known_match.group(1).strip(),
+                            "amount": float(known_match.group(2)),
+                            "specific_members": None,
+                        }
+                    )
             continue
         
         raw_name = re.sub(r"^(和|以及|還有)", "", match.group(1).strip())
@@ -70,6 +84,30 @@ def parse_receipt_items(text: str) -> list[dict[str, Any]]:
             "specific_members": specific_members
         })
     return items
+
+
+def _split_receipt_chunks(segment: str) -> list[str]:
+    chunks: list[str] = []
+    buffer: list[str] = []
+    depth = 0
+    for char in segment:
+        if char in "(（":
+            depth += 1
+        elif char in ")）" and depth > 0:
+            depth -= 1
+
+        if char in "、,，；;" and depth == 0:
+            chunk = "".join(buffer).strip()
+            if chunk:
+                chunks.append(chunk)
+            buffer = []
+            continue
+        buffer.append(char)
+
+    chunk = "".join(buffer).strip()
+    if chunk:
+        chunks.append(chunk)
+    return chunks
 
 
 def classify_item(item_name: str, roommates: list[str] = None) -> tuple[str, str | None]:

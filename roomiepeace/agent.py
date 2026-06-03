@@ -6,6 +6,7 @@ from typing import Any
 
 from .guardrails import guardrail_check
 from .memory import MemoryStore
+from .nlu import INTENT_TO_SKILL, NLUResult, extract_task
 from .router import route
 from .superpowers import (
     chore_planner,
@@ -36,24 +37,37 @@ class RoomiePeaceAgent:
             result = self._guardrail_response(user_input, privacy_guard)
             return result
 
+        nlu_result = extract_task(user_input, self.memory.snapshot()["roommates"])
         route_result = route(user_input)
+        if nlu_result.intent in INTENT_TO_SKILL and nlu_result.confidence >= 0.65:
+            route_result = type(route_result)(
+                intent=nlu_result.intent,
+                selected_superpower=nlu_result.selected_superpower,
+                reason=f"NLU {nlu_result.source}, confidence {nlu_result.confidence:.2f}",
+            )
+
         trace = AgentTrace(
             user_input=user_input,
             intent=route_result.intent,
             selected_superpower=route_result.selected_superpower,
             router_reason=route_result.reason,
+            nlu_result=nlu_result.to_trace(),
         )
+
+        clarification = self._maybe_clarify(user_input, route_result.intent, nlu_result, trace)
+        if clarification:
+            return clarification
 
         if route_result.intent == "setup_roommates":
             result = self._setup_roommates(user_input)
         elif route_result.intent == "receipt_splitter":
-            result = receipt_splitter.handle(user_input, self.memory)
+            result = receipt_splitter.handle(user_input, self.memory, nlu_result.data)
         elif route_result.intent == "chore_planner":
             result = chore_planner.handle(user_input, self.memory)
         elif route_result.intent == "conflict_mediator":
-            result = conflict_mediator.handle(user_input, self.memory)
+            result = conflict_mediator.handle(user_input, self.memory, nlu_result.data)
         elif route_result.intent == "roomie_court":
-            result = roomie_court.handle(user_input, self.memory)
+            result = roomie_court.handle(user_input, self.memory, nlu_result.data)
         elif route_result.intent == "karma_report":
             result = karma_report.handle(user_input, self.memory)
         elif route_result.intent == "line_announcement":
@@ -79,6 +93,29 @@ class RoomiePeaceAgent:
         result["trace"] = trace.to_dict()
         result["memory_snapshot"] = self.memory.snapshot()
         return result
+
+    def _maybe_clarify(
+        self,
+        user_input: str,
+        intent: str,
+        nlu_result: NLUResult,
+        trace: AgentTrace,
+    ) -> dict[str, Any] | None:
+        if intent == "receipt_splitter" and "items" in nlu_result.missing_fields:
+            return self._clarification_response(
+                user_input,
+                trace,
+                "我看得出來你想分帳，但我缺少品項金額。",
+                "請用像「阿明買了衛生紙129、垃圾袋65」或「阿明幫大家買衛生紙129元 垃圾袋65元」這種格式。",
+            )
+        if intent in {"conflict_mediator", "roomie_court"} and "target" in nlu_result.missing_fields:
+            return self._clarification_response(
+                user_input,
+                trace,
+                "我看得出來這是室友提醒或法庭任務，但不知道要處理哪位室友。",
+                "請補上名字，例如「冠宇又忘記倒垃圾，幫我提醒他」或「判決冠宇不倒垃圾」。",
+            )
+        return None
 
     def _setup_roommates(self, user_input: str) -> dict[str, Any]:
         snapshot = self.memory.snapshot()
@@ -152,6 +189,40 @@ class RoomiePeaceAgent:
             "line_message": guardrail_result["suggestion"],
             "tables": {},
             "tools_used": ["guardrail_check"],
+            "memory_updates": [],
+            "trace": trace.to_dict(),
+            "memory_snapshot": self.memory.snapshot(),
+        }
+
+    def _clarification_response(
+        self,
+        user_input: str,
+        trace: AgentTrace,
+        issue: str,
+        suggestion: str,
+    ) -> dict[str, Any]:
+        trace.tools_used = ["extract_task", "clarification_guard"]
+        trace.memory_updates = []
+        trace.guardrail_result = {"safe": True, "issues": [], "suggestion": "Ask for missing fields."}
+        markdown = f"""
+### 我需要再確認一下
+
+{issue}
+
+{suggestion}
+
+我先不會更新 memory，也不會亂算，避免把錯誤資料寫進室友紀錄。
+""".strip()
+        trace.final_output = markdown
+        return {
+            "intent": "clarification",
+            "skill": "clarification",
+            "response_markdown": markdown,
+            "line_message": "",
+            "tables": {
+                "缺少欄位": [{"field": field} for field in trace.nlu_result.get("missing_fields", [])]
+            },
+            "tools_used": trace.tools_used,
             "memory_updates": [],
             "trace": trace.to_dict(),
             "memory_snapshot": self.memory.snapshot(),

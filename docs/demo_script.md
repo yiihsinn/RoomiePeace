@@ -6,11 +6,12 @@
 
 一句話介紹：
 
-> RoomiePeace 不是普通室友聊天室，而是 Skill-based 共居生活協調 Agent。它會判斷 intent、啟動 skill、呼叫 deterministic tools、更新 event-based memory，最後產生 LINE 公告和 trace。
+> RoomiePeace 不是普通室友聊天室，而是 Skill-based 共居生活協調 Agent。它會先用 Vertex Gemini 或 deterministic fallback 抽出 structured task fields，再判斷 intent、啟動 skill、呼叫 deterministic tools、更新 event-based memory，最後產生 LINE 公告和 trace。
 
 請觀眾注意右側 Agent Trace：
 
 - `intent`
+- `nlu_result.source`
 - `selected_superpower`
 - `tools_used`
 - `memory_updates`
@@ -41,6 +42,7 @@
 預期重點：
 
 - 進入 `receipt-splitter-skill`
+- 有 Vertex credentials 時，`nlu_result.source` 會顯示 `vertex_gemini_structured_output`
 - `parse_receipt_items` 解析品項
 - `split_bill` 算出公費 353 元
 - 四人平分每人 88.25 元
@@ -133,5 +135,5 @@
 可以強調：
 
 - Agent 不是黑箱聊天，因為 trace 顯示它選了哪個 skill、用了哪些 tools、更新哪些 memory。
-- 沒有 API key 也能跑，demo 穩定。
+- 有 Vertex credentials 時可展示 Gemini structured extraction；沒有 credentials 時 fallback 也能跑，demo 穩定。
 - 真實金流、LINE API、法律判決都沒有真的執行，符合 prototype 和 guardrail 範圍。

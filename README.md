@@ -18,7 +18,8 @@ RoomiePeace 不是普通聊天室。它會先用 deterministic Router 判斷 int
 
 ```text
 User input
-  -> Router
+  -> Vertex Gemini NLU extraction if configured
+  -> deterministic Router fallback
   -> selected Superpower / Skill
   -> Tool execution
   -> Memory update
@@ -31,6 +32,7 @@ User input
 - `app.py`：Streamlit UI，包含三個 demo / 協作模式
 - `roomiepeace/agent.py`：Agent orchestration
 - `roomiepeace/router.py`：deterministic intent router
+- `roomiepeace/nlu.py`：optional Vertex Gemini structured extraction + deterministic fallback
 - `roomiepeace/memory.py`：JSON event-based memory
 - `roomiepeace/guardrails.py`：安全檢查
 - `roomiepeace/superpowers/`：各 superpower
@@ -159,6 +161,46 @@ http://localhost:8501
 
 Guided Demo 的文案在 `data/demo_scenarios.json`，H 可以直接改 JSON，不需要改 `app.py`。
 
+## Vertex Gemini NLU
+
+這版支援 optional Vertex Gemini extraction。`.env` 有以下設定時，Agent 會先用 Gemini 把使用者自然語言抽成 structured task fields：
+
+```text
+GOOGLE_GENAI_USE_VERTEXAI=true
+GOOGLE_CLOUD_PROJECT=...
+GOOGLE_CLOUD_LOCATION=...
+GOOGLE_APPLICATION_CREDENTIALS=...
+```
+
+例如使用者可以打比較自然的句子：
+
+```text
+今天阿明先墊了公共用品，衛生紙129元，洗衣精159元，垃圾袋65元，餅乾89是他自己的，幫大家算一下
+```
+
+Gemini NLU 會抽出：
+
+```json
+{
+  "intent": "receipt_splitter",
+  "payer": "阿明",
+  "items": [
+    {"name": "衛生紙", "amount": 129, "classification": "shared"},
+    {"name": "洗衣精", "amount": 159, "classification": "shared"},
+    {"name": "垃圾袋", "amount": 65, "classification": "shared"},
+    {"name": "餅乾", "amount": 89, "classification": "personal"}
+  ]
+}
+```
+
+接著 `split_bill` tool 才會計算公費、每人金額和轉帳建議。也就是：
+
+```text
+Gemini 負責理解欄位，Tools 負責正確計算，Memory 負責狀態，Guardrail 負責界線。
+```
+
+如果沒有 Vertex credentials，或 Gemini extraction 失敗，系統會退回 deterministic fallback，demo 仍然可以跑。
+
 ## Skill Owner 測試方式
 
 1. 進入 `Skill Sandbox`
@@ -207,9 +249,9 @@ python -m pytest -q
 
 ## Deterministic fallback
 
-這個 prototype 不依賴外部 LLM，也不需要 API key。所有 demo 主流程都用規則、工具函式和模板產生，確保上課展示時不會因為網路或 key 出問題。
+這個 prototype 不會把核心正確性押在 LLM 上。即使沒有 Vertex credentials，系統仍會用規則、regex、工具函式和模板跑完整 demo。
 
-未來如果要加入 LLM，可以把它放在自然語言生成層，但金額計算、排班分數和 memory 更新仍應保留在 deterministic tools。
+有 Vertex Gemini 時，LLM 只做 NLU extraction，不做金額計算、排班分數或 memory 更新。
 
 ## 限制
 

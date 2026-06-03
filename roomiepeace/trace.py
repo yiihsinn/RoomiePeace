@@ -12,6 +12,7 @@ class AgentTrace:
     tools_used: list[str] = field(default_factory=list)
     memory_updates: list[str] = field(default_factory=list)
     guardrail_result: dict[str, Any] = field(default_factory=dict)
+    nlu_result: dict[str, Any] = field(default_factory=dict)
     final_output: str = ""
     router_reason: str = ""
 
@@ -23,6 +24,7 @@ class AgentTrace:
             "tools_used": self.tools_used,
             "memory_updates": self.memory_updates,
             "guardrail_result": self.guardrail_result,
+            "nlu_result": self.nlu_result,
             "router_reason": self.router_reason,
             "final_output": self.final_output,
         }

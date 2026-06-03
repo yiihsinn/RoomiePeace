@@ -133,5 +133,5 @@
 - Demo steps：7 / 7 完成
 - Required skills：5 / 5 完成
 - Optional demo skill：LINE announcement 完成
-- External API dependency：0
+- Vertex Gemini NLU：optional，有 credentials 時展示 structured extraction，無 credentials 時 fallback
 - Real transfer / LINE API / legal action：0

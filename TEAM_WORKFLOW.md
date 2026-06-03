@@ -12,7 +12,7 @@
 | D | Roomie Court Skill | `roomiepeace/superpowers/roomie_court.py`, `roomiepeace/tools/text_tools.py` | 法庭格式、證據、判決理由、娛樂免責 |
 | E | Karma Report Skill | `roomiepeace/superpowers/karma_report.py`, `roomiepeace/tools/karma_tools.py` | Karma 計分、排行榜、稱號、共居狀態 |
 | F | UI / Dashboard | `app.py`, `docs/demo_script.md` if needed | Guided Demo、Skill Sandbox、Dashboard 體驗 |
-| G | Integration / Router / Memory / Trace | `roomiepeace/agent.py`, `roomiepeace/router.py`, `roomiepeace/memory.py`, `roomiepeace/trace.py`, `data/memory.json` | agent flow、router、event memory、trace、整合測試 |
+| G | Integration / Router / Memory / Trace | `roomiepeace/agent.py`, `roomiepeace/nlu.py`, `roomiepeace/router.py`, `roomiepeace/memory.py`, `roomiepeace/trace.py`, `data/memory.json` | Gemini NLU、agent flow、router、event memory、trace、整合測試 |
 | H | Demo / PPT / Video / Evaluation | `data/demo_scenarios.json`, `docs/demo_flow_v2.md`, `docs/project_overview.md`, `README.md`, `docs/evaluation_plan.md` | demo 講稿、錄影順序、PPT 素材、評測方式 |
 
 `line_announcement.py` 是 demo 整合 skill，建議由 G 或 H 維護，因為它會讀取前面步驟產生的 memory。
@@ -23,6 +23,8 @@
 
 ```text
 User input
+  -> Vertex Gemini NLU extraction if configured
+  -> deterministic fallback if needed
   -> Router
   -> selected Superpower / Skill
   -> Tool execution
